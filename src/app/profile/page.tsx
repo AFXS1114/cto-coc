@@ -43,7 +43,7 @@ interface Employee {
 
 const loginSchema = z.object({
   employeeName: z.string().min(1, { message: 'Please select your name.' }),
-  employeeId: z.string().min(1, { message: 'Please enter your ID No.' }),
+  employeeId: z.string().regex(/^\d{4}-\d{2}$/, 'ID No. must be in the format ####-##.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -128,7 +128,7 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
                 <FormItem>
                   <FormLabel>ID No. (as Password)</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Enter your ID No." {...field} />
+                    <Input type="password" placeholder="Enter your ID No. (e.g., 1234-56)" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
