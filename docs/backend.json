@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "LeaveRequest": {
@@ -181,6 +182,22 @@
             {
               "name": "wancocRequestId",
               "description": "The unique identifier of the WAN/COC request."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/to-process-leave/{leaveRequestId}",
+        "definition": {
+          "entityName": "LeaveRequest",
+          "schema": {
+            "$ref": "#/backend/entities/LeaveRequest"
+          },
+          "description": "Stores all leave requests that are pending review. The 'leaveRequestId' parameter identifies the specific leave request.",
+          "params": [
+            {
+              "name": "leaveRequestId",
+              "description": "The unique identifier of the leave request."
             }
           ]
         }

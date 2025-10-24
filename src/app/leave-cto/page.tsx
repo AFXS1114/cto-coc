@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { useFirestore } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection } from 'firebase/firestore';
 
 const leaveFormSchema = z.object({
   leaveCode: z.string(),
@@ -61,6 +64,7 @@ function generateLeaveCode() {
 function LeaveForm() {
   const { toast } = useToast();
   const [leaveCode, setLeaveCode] = useState('');
+  const firestore = useFirestore();
 
   useEffect(() => {
     setLeaveCode(generateLeaveCode());
@@ -107,12 +111,35 @@ function LeaveForm() {
   }, [leaveCode, form]);
 
   function onSubmit(data: LeaveFormValues) {
-    console.log(data);
+    const inclusiveDatesFormatted = Array.isArray(data.inclusiveDates)
+    ? data.inclusiveDates.map(date => format(date, 'yyyy-MM-dd'))
+    : {
+        from: format(data.inclusiveDates.from, 'yyyy-MM-dd'),
+        to: data.inclusiveDates.to ? format(data.inclusiveDates.to, 'yyyy-MM-dd') : undefined
+      };
+
+    const submissionData = {
+        id: data.leaveCode,
+        requestType: 'Leave',
+        submittedDate: format(data.dateOfFiling, 'yyyy-MM-dd'),
+        startDate: Array.isArray(inclusiveDatesFormatted) ? inclusiveDatesFormatted[0] : inclusiveDatesFormatted.from,
+        endDate: Array.isArray(inclusiveDatesFormatted) ? inclusiveDatesFormatted[inclusiveDatesFormatted.length - 1] : inclusiveDatesFormatted.to || inclusiveDatesFormatted.from,
+        reason: 'N/A', // Not in form, but in schema
+        status: 'Pending',
+        userId: 'temp-user-id', // Placeholder, will be replaced with auth user
+        ...data,
+        dateOfFiling: format(data.dateOfFiling, 'yyyy-MM-dd'),
+        inclusiveDates: inclusiveDatesFormatted,
+      };
+
+    const collectionRef = collection(firestore, 'to-process-leave');
+    addDocumentNonBlocking(collectionRef, submissionData);
+    
     toast({
       title: 'Leave Filed Successfully!',
       description: `Your leave request (${data.leaveCode}) has been submitted.`,
     });
-    // Reset form and generate a new leave code
+    
     form.reset({
         leaveCode: '',
         officeAgency: 'PFDA-BFPC',
