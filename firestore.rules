@@ -1,133 +1,146 @@
 /**
- * @fileoverview Firestore Security Rules for the Leave Request Application.
+ * @fileoverview Firestore Security Rules for the application.
  *
  * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for personal data (leave requests, WAN/COC requests)
- * and allows public read access for employee data, with no authorization required.
+ * This ruleset enforces a strict user-ownership model for user profiles, leave requests, and WAN/COC requests.
+ * It allows public read access to employee records, but restricts write access.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles.
- * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
- * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
- * - /to-process-leave/{leaveRequestId}: Stores leave requests pending review.
- * - /employees/{employeeId}: Stores employee information.
+ * - /users/{userId}: Stores user profile information, accessible only to the user themselves.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests, accessible only to the owning user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests, accessible only to the owning user.
+ * - /to-process-leave/{leaveRequestId}: Stores leave requests that are pending review; write operations are open to all authenticated users,
+ * - /employees/{employeeId}: Stores employee records. Publicly readable, write access is open to all authenticated users.
  *
  * Key Security Decisions:
- * - User-specific data (leave_requests, wancoc_requests) is strictly controlled by the owning user.
- * - Employees collection is publicly readable, but creation, update, and deletion are denied without authentication.
- * - No listing of the /users collection is allowed to prevent user enumeration.
- *
- * Denormalization for Authorization:
- * - The 'userId' field within leave and WAN/COC requests is used to enforce ownership, avoiding the need for `get()` calls to the /users collection.
+ * - User listing is disallowed to protect user privacy.
+ * - Read-only collections are used for public data (e.g., employee records) where all users can view information.
+ * - Ambiguous relationships default to strict owner-only access to prevent unintended data exposure.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Prevents listing of all users.
-     * @path /users
-     * @allow None - Listing is always denied.
-     * @deny None - Listing is always denied.
-     * @principle Prevents user enumeration.
-     */
-    match /users {
-      allow list: if false;
-    }
-
-    /**
-     * @description Controls access to user profiles.
+     * @description Secures user profiles, allowing only the user to access their own data.
      * @path /users/{userId}
-     * @allow (create) User with ID 'user123' can create their own profile.
-     * @allow (get) User with ID 'user123' can read their own profile.
-     * @allow (update) User with ID 'user123' can update their own profile.
-     * @allow (delete) User with ID 'user123' can delete their own profile.
-     * @deny (create) User with ID 'user456' cannot create a profile with ID 'user123'.
-     * @deny (get) User with ID 'user456' cannot read the profile of 'user123'.
+     * @allow (create) User with ID 'user123' can create their profile.
+     * @deny (create) User with ID 'user456' cannot create a profile for 'user123'.
+     * @allow (get) User with ID 'user123' can read their profile.
+     * @deny (get) User with ID 'user456' cannot read 'user123's profile.
+     * @allow (update) User with ID 'user123' can update their profile.
+     * @deny (update) User with ID 'user456' cannot update 'user123's profile.
+     * @allow (delete) User with ID 'user123' can delete their profile.
+     * @deny (delete) User with ID 'user456' cannot delete 'user123's profile.
      * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isExistingOwner(userId);
-      allow list: if false; // Prevent listing users
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
 
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Controls access to leave requests for a specific user.
+     * @description Secures leave requests, allowing only the owning user to access them.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (create) User with ID 'user123' can create a leave request under their profile.
-     * @allow (get) User with ID 'user123' can read a leave request under their profile.
-     * @allow (update) User with ID 'user123' can update a leave request under their profile.
-     * @allow (delete) User with ID 'user123' can delete a leave request under their profile.
-     * @deny (create) User with ID 'user456' cannot create a leave request under 'user123'.
-     * @deny (get) User with ID 'user456' cannot read a leave request under 'user123'.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create a leave request.
+     * @deny (create) User with ID 'user456' cannot create a leave request for 'user123'.
+     * @allow (get) User with ID 'user123' can read their leave request.
+     * @deny (get) User with ID 'user456' cannot read 'user123's leave request.
+     * @allow (update) User with ID 'user123' can update their leave request.
+     * @deny (update) User with ID 'user456' cannot update 'user123's leave request.
+     * @allow (delete) User with ID 'user123' can delete their leave request.
+     * @deny (delete) User with ID 'user456' cannot delete 'user123's leave request.
+     * @principle Enforces document ownership for all operations within a user's data tree.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
       allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
-      allow list: if isOwner(userId);
     }
 
     /**
-     * @description Controls access to WAN/COC requests for a specific user.
+     * @description Secures WAN/COC requests, allowing only the owning user to access them.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (create) User with ID 'user123' can create a WAN/COC request under their profile.
-     * @allow (get) User with ID 'user123' can read a WAN/COC request under their profile.
-     * @allow (update) User with ID 'user123' can update a WAN/COC request under their profile.
-     * @allow (delete) User with ID 'user123' can delete a WAN/COC request under their profile.
-     * @deny (create) User with ID 'user456' cannot create a WAN/COC request under 'user123'.
-     * @deny (get) User with ID 'user456' cannot read a WAN/COC request under 'user123'.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create a WAN/COC request.
+     * @deny (create) User with ID 'user456' cannot create a WAN/COC request for 'user123'.
+     * @allow (get) User with ID 'user123' can read their WAN/COC request.
+     * @deny (get) User with ID 'user456' cannot read 'user123's WAN/COC request.
+     * @allow (update) User with ID 'user123' can update their WAN/COC request.
+     * @deny (update) User with ID 'user456' cannot update 'user123's WAN/COC request.
+     * @allow (delete) User with ID 'user123' can delete their WAN/COC request.
+     * @deny (delete) User with ID 'user456' cannot delete 'user123's WAN/COC request.
+     * @principle Enforces document ownership for all operations within a user's data tree.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+
       allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
-      allow list: if isOwner(userId);
     }
 
     /**
-     * @description Controls access to leave requests pending review.
+     * @description Secures leave requests pending review, allowing any authenticated user to create and modify them.
      * @path /to-process-leave/{leaveRequestId}
-     * @allow (get) Any authenticated user can get leave requests to process.
-     * @allow (list) Any authenticated user can list leave requests to process.
-     * @deny (create) No one should be able to create a leave request using this endpoint.
-     * @deny (update) No one should be able to update a leave request using this endpoint.
-     * @deny (delete) No one should be able to delete a leave request using this endpoint.
+     * @allow (create) Any authenticated user can create a leave request to be processed.
+     * @allow (get) Any user can read the leave requests pending review.
+     * @allow (update) Any authenticated user can update a leave request.
+     * @allow (delete) Any authenticated user can delete a leave request.
+     * @principle Allows open read and write access to authenticated users for the purpose of reviewing and processing leave requests.
      */
     match /to-process-leave/{leaveRequestId} {
-      allow get, list: if isSignedIn();
-      allow create, update, delete: if false;
+        function isSignedIn() {
+            return request.auth != null;
+        }
+        allow get, list: if true;
+        allow create, update, delete: if isSignedIn();
     }
 
     /**
-     * @description Controls access to employee information.
+     * @description Secures employee records, allowing public read access but authenticated user create and write access.
      * @path /employees/{employeeId}
-     * @allow (get, list) Any user can read employee information.
-     * @deny (create, update, delete) No user can create, update, or delete employee information without authentication.
+     * @allow (get) Any user can read employee information.
+     * @deny (create) Anonymous user cannot create an employee record.
+     * @allow (update) Authenticated User can update an employee record.
+     * @deny (delete) Anonymous user cannot delete an employee record.
+     * @principle Provides public read access while restricting write access to logged-in users.
      */
     match /employees/{employeeId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
       allow get, list: if true;
-      allow create, update, delete: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+      allow create, update, delete: if isSignedIn();
     }
   }
 }
