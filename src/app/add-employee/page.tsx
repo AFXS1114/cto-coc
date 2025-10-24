@@ -1,8 +1,109 @@
 
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
+import React from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { useFirestore } from '@/firebase';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection } from 'firebase/firestore';
+
+const employeeFormSchema = z.object({
+  id: z.string().regex(/^\d{4}-\d{2}$/, 'ID No. must be in the format ####-##.'),
+  name: z.string().min(1, 'Name is required.'),
+  position: z.string(),
+});
+
+type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
+
+function EmployeeForm() {
+  const { toast } = useToast();
+  const firestore = useFirestore();
+
+  const form = useForm<EmployeeFormValues>({
+    resolver: zodResolver(employeeFormSchema),
+    defaultValues: {
+      id: '',
+      name: '',
+      position: 'Administrative Aide IV',
+    },
+  });
+
+  function onSubmit(data: EmployeeFormValues) {
+    const collectionRef = collection(firestore, 'employees');
+    addDocumentNonBlocking(collectionRef, data);
+    
+    toast({
+      title: 'Employee Added Successfully!',
+      description: `${data.name} has been added to the system.`,
+    });
+    
+    form.reset();
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <FormField
+          control={form.control}
+          name="id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>ID No.</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., 1234-56" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter full name" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="position"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Position</FormLabel>
+              <FormControl>
+                <Input {...field} readOnly className="bg-muted" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" className="w-full">Add Employee</Button>
+      </form>
+    </Form>
+  );
+}
+
 
 export default function AddEmployeePage() {
   return (
@@ -13,8 +114,8 @@ export default function AddEmployeePage() {
             <CardTitle className="text-3xl font-headline">Add Employee</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground mb-6">This is where you will add a new employee. Content will be added here later.</p>
-            <Button asChild>
+            <EmployeeForm />
+            <Button asChild variant="link" className="mt-6 w-full">
               <Link href="/settings">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Settings

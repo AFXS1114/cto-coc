@@ -120,6 +120,31 @@
         "username",
         "email"
       ]
+    },
+    "Employee": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Employee",
+      "type": "object",
+      "description": "Represents an employee in the system.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the employee, format ####-##."
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the employee."
+        },
+        "position": {
+          "type": "string",
+          "description": "Position of the employee."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "position"
+      ]
     }
   },
   "auth": {
@@ -198,6 +223,22 @@
             {
               "name": "leaveRequestId",
               "description": "The unique identifier of the leave request."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/employees/{employeeId}",
+        "definition": {
+          "entityName": "Employee",
+          "schema": {
+            "$ref": "#/backend/entities/Employee"
+          },
+          "description": "Stores employee information. The 'employeeId' parameter identifies the employee document.",
+          "params": [
+            {
+              "name": "employeeId",
+              "description": "The unique identifier for the employee."
             }
           ]
         }
