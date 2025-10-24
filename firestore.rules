@@ -2,116 +2,153 @@
  * @fileoverview Firestore Security Rules for the application.
  *
  * Core Philosophy:
- * This ruleset enforces a strict user-ownership model. Each user can only
- * access their own data, with all data being nested under a user-specific
- * path. This promotes data privacy and prevents unauthorized access.
+ * This ruleset enforces a strict user-ownership model for personal data (leave requests and WAN/COC requests).
+ * Users can only access their own data. Additionally, it includes a separate collection for leave requests pending
+ * review, which is currently left open for prototyping but should be secured in a production environment.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles.
- * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
- * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
+ * - /users/{userId}: Stores user profiles, accessible only by the user themselves.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests, accessible only by the owning user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests, accessible only by the owning user.
+ * - /to-process-leave/{leaveRequestId}: Stores leave requests pending review, currently publicly accessible for prototyping.
  *
  * Key Security Decisions:
- * - User data is private and only accessible to the authenticated user.
- * - Listing of all users is disallowed for privacy reasons.
+ * - User listing is disallowed.
+ * - The /to-process-leave collection is currently open to the public for prototyping purposes and MUST be secured later.
+ * - Data validation is minimal in this prototype, focusing on ownership and relational integrity checks.
  *
  * Denormalization for Authorization:
- * The `LeaveRequest` and `WANCOCRequest` entities include a `userId` field,
- * which is redundant with the path. However, this denormalization is
- * REQUIRED for security rules on `create` operations. Specifically, the
- * `create` rule MUST validate that the incoming `userId` matches the
- * `request.auth.uid` to prevent a malicious client from creating data
- * "for" another user.
+ * The `userId` is included directly within the `LeaveRequest` and `WANCOCRequest` documents to enable
+ * simple ownership checks without additional `get()` calls. This leverages path-based ownership, ensuring
+ * that the `userId` in the path matches the `userId` field in the document.
+ *
+ * Structural Segregation:
+ * Private user data (leave requests, WAN/COC requests) is stored under the `/users/{userId}` path, while a separate
+ * top-level collection `/to-process-leave` is used for pending leave requests.  This simplifies access control.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Manages access to user profile documents.
+     * @description Enforces access control for user profiles.
      * @path /users/{userId}
-     * @allow (create) - If the user's ID matches the requested userId.
-     * @allow (get) - If the user's ID matches the requested userId.
-     * @allow (update) - If the user's ID matches the requested userId.
-     * @allow (delete) - If the user's ID matches the requested userId.
-     * @allow (list) - Denied to prevent enumeration of users.
-     * @deny (create) - If the user's ID does not match the requested userId.
-     * @deny (get) - If the user's ID does not match the requested userId.
-     *
-     * @principle Enforces document ownership: only the user can read/write their own profile.
+     * @allow (create) User with ID 'user123' can create their own profile.
+     *          request.auth.uid == 'user123' and request.resource.data.id == 'user123'
+     * @allow (get) User with ID 'user123' can read their own profile.
+     *          request.auth.uid == 'user123'
+     * @allow (update) User with ID 'user123' can update their own profile.
+     *          request.auth.uid == 'user123' and resource.data.id == 'user123'
+     * @allow (delete) User with ID 'user123' can delete their own profile.
+     *          request.auth.uid == 'user123' and resource.data.id == 'user123'
+     * @deny (create) User with ID 'user456' cannot create a profile for 'user123'.
+     *          request.auth.uid == 'user456' and request.resource.data.id == 'user123'
+     * @deny (get) User with ID 'user456' cannot read profile of 'user123'.
+     *          request.auth.uid == 'user456'
+     * @principle Enforces document ownership, validates user ID on creation and ensures data consistency.
      */
     match /users/{userId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
-
       function isExistingOwner(userId) {
-          return isOwner(userId) && resource != null;
+        return isOwner(userId) && resource != null;
       }
 
-      allow create: if isOwner(userId);
       allow get: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
       allow list: if false;
+
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Manages access to leave request documents for a specific user.
+     * @description Enforces access control for leave requests under a specific user.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (create) - If the user's ID matches the requested userId.
-     * @allow (get) - If the user's ID matches the requested userId.
-     * @allow (update) - If the user's ID matches the requested userId.
-     * @allow (delete) - If the user's ID matches the requested userId.
-     * @allow (list) - If the user's ID matches the requested userId.
-     * @deny (create) - If the user's ID does not match the requested userId.
-     * @deny (get) - If the user's ID does not match the requested userId.
-     *
-     * @principle Enforces document ownership: only the user can read/write their own leave requests.
+     * @allow (create) User with ID 'user123' can create a leave request under their profile.
+     *          request.auth.uid == 'user123' and request.resource.data.userId == 'user123'
+     * @allow (get) User with ID 'user123' can read a leave request under their profile.
+     *          request.auth.uid == 'user123'
+     * @allow (update) User with ID 'user123' can update a leave request under their profile.
+     *          request.auth.uid == 'user123' and resource.data.userId == 'user123'
+     * @allow (delete) User with ID 'user123' can delete a leave request under their profile.
+     *          request.auth.uid == 'user123' and resource.data.userId == 'user123'
+     * @deny (create) User with ID 'user456' cannot create a leave request under 'user123' profile.
+     *          request.auth.uid == 'user456' and request.resource.data.userId == 'user123'
+     * @deny (get) User with ID 'user456' cannot read a leave request under 'user123' profile.
+     *          request.auth.uid == 'user456'
+     * @principle Enforces document ownership, validates user ID on creation, and ensures data consistency.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
-
-      function isExistingOwner(userId) {
+       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
-        
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+
       allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
       allow update: if isExistingOwner(userId) && resource.data.userId == userId;
       allow delete: if isExistingOwner(userId);
-      allow list: if isOwner(userId);
     }
 
     /**
-     * @description Manages access to WAN/COC request documents for a specific user.
+     * @description Enforces access control for WAN/COC requests under a specific user.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (create) - If the user's ID matches the requested userId.
-     * @allow (get) - If the user's ID matches the requested userId.
-     * @allow (update) - If the user's ID matches the requested userId.
-     * @allow (delete) - If the user's ID matches the requested userId.
-     * @allow (list) - If the user's ID matches the requested userId.
-     * @deny (create) - If the user's ID does not match the requested userId.
-     * @deny (get) - If the user's ID does not match the requested userId.
-     *
-     * @principle Enforces document ownership: only the user can read/write their own WAN/COC requests.
+     * @allow (create) User with ID 'user123' can create a WAN/COC request under their profile.
+     *          request.auth.uid == 'user123' and request.resource.data.userId == 'user123'
+     * @allow (get) User with ID 'user123' can read a WAN/COC request under their profile.
+     *          request.auth.uid == 'user123'
+     * @allow (update) User with ID 'user123' can update a WAN/COC request under their profile.
+     *          request.auth.uid == 'user123' and resource.data.userId == 'user123'
+     * @allow (delete) User with ID 'user123' can delete a WAN/COC request under their profile.
+     *          request.auth.uid == 'user123' and resource.data.userId == 'user123'
+     * @deny (create) User with ID 'user456' cannot create a WAN/COC request under 'user123' profile.
+     *          request.auth.uid == 'user456' and request.resource.data.userId == 'user123'
+     * @deny (get) User with ID 'user456' cannot read a WAN/COC request under 'user123' profile.
+     *          request.auth.uid == 'user456'
+     * @principle Enforces document ownership, validates user ID on creation, and ensures data consistency.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
       function isOwner(userId) {
-        return request.auth.uid == userId;
+        return request.auth != null && request.auth.uid == userId;
       }
-
       function isExistingOwner(userId) {
         return isOwner(userId) && resource != null;
       }
 
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
       allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
       allow update: if isExistingOwner(userId) && resource.data.userId == userId;
       allow delete: if isExistingOwner(userId);
-      allow list: if isOwner(userId);
+    }
+
+       /**
+     * @description Allows public read access to leave requests pending review.
+     *              WRITE ACCESS IS INTENTIONALLY LEFT OPEN FOR PROTOTYPING PURPOSES ONLY.
+     *              THIS MUST BE SECURED IN A PRODUCTION ENVIRONMENT.
+     * @path /to-process-leave/{leaveRequestId}
+     * @allow (get) Any user can read leave requests pending review.
+     *          true
+     * @allow (list) Any user can list leave requests pending review.
+     *          true
+     * @allow (create) Any user can create leave requests pending review.
+     *          true  (THIS IS INSECURE AND FOR PROTOTYPING ONLY)
+     * @allow (update) Any user can update leave requests pending review.
+     *          true  (THIS IS INSECURE AND FOR PROTOTYPING ONLY)
+     * @allow (delete) Any user can delete leave requests pending review.
+     *          true  (THIS IS INSECURE AND FOR PROTOTYPING ONLY)
+     * @principle Public read access for prototyping.  WRITE ACCESS MUST BE SECURED.
+     */
+    match /to-process-leave/{leaveRequestId} {
+       allow get, list: if true;
+       allow create, update, delete: if true; // TODO: Add security rules for production. This is open for prototyping.
     }
   }
 }
