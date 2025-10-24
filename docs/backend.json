@@ -38,6 +38,10 @@
           "type": "string",
           "description": "Status of the leave request (e.g., 'Pending', 'Approved', 'Rejected')."
         },
+        "remarks": {
+          "type": "string",
+          "description": "Remarks from an admin for cancelling a request."
+        },
         "userId": {
           "type": "string",
           "description": "Reference to User. (Relationship: User 1:N LeaveRequest)"
@@ -79,7 +83,7 @@
         },
         "status": {
           "type": "string",
-          "description": "Status of the WAN/COC request (e.g., 'Pending', 'Approved', 'Rejected')."
+          "description": "Status of the WAN/COC request (eg., 'Pending', 'Approved', 'Rejected')."
         },
         "userId": {
           "type": "string",

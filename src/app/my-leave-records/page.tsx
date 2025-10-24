@@ -38,6 +38,7 @@ interface LeaveRecord extends DocumentData {
   daysApplied: number;
   inclusiveDates: { from: string; to?: string } | string[];
   status: 'Pending' | 'Approved' | 'Cancelled';
+  remarks?: string;
 }
 
 const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
@@ -105,6 +106,7 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
           <TableHead>Date Filed</TableHead>
           <TableHead className="text-center">No. of Days</TableHead>
           <TableHead>Inclusive Dates</TableHead>
+          <TableHead>Remarks</TableHead>
           <TableHead className="text-right">Status</TableHead>
         </TableRow>
       </TableHeader>
@@ -114,6 +116,7 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
             <TableCell>{format(new Date(record.submittedDate), 'MMM dd, yyyy')}</TableCell>
             <TableCell className="text-center">{record.daysApplied}</TableCell>
             <TableCell>{formatDateRange(record.inclusiveDates)}</TableCell>
+            <TableCell>{record.remarks || 'N/A'}</TableCell>
             <TableCell className="text-right">
                 <Badge variant={
                     record.status === 'Approved' ? 'default' :

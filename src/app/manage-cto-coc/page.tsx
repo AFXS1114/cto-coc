@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -29,6 +30,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData } from 'firebase/firestore';
@@ -60,37 +63,63 @@ const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
 function ManageCtoCocTable() {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [remarks, setRemarks] = useState('');
   const pendingLeaveQuery = useMemoFirebase(
     () => collection(firestore, 'to-process-leave'),
     [firestore]
   );
   const { data: pendingRequests, isLoading } = useCollection<LeaveRequest>(pendingLeaveQuery);
 
-  const handleStatusChange = async (request: LeaveRequest, newStatus: 'Approved' | 'Cancelled') => {
-    if (!firestore) return;
-
-    const targetCollectionName = newStatus === 'Approved' ? 'processed-cto' : 'cancelled-cto';
-    
+  const handleApprove = async (request: LeaveRequest) => {
+     if (!firestore) return;
     try {
-      // 1. Add the document to the new collection
-      const newDocRef = doc(firestore, targetCollectionName, request.id);
-      await setDoc(newDocRef, { ...request, status: newStatus });
+      // 1. Add the document to the processed-cto collection
+      const newDocRef = doc(firestore, 'processed-cto', request.id);
+      await setDoc(newDocRef, { ...request, status: 'Approved' });
 
       // 2. Delete the document from the old collection
       const oldDocRef = doc(firestore, 'to-process-leave', request.id);
       await deleteDoc(oldDocRef);
       
       toast({
-        title: `Request ${newStatus}`,
-        description: `The leave request for ${request.name} has been moved to ${targetCollectionName}.`
+        title: `Request Approved`,
+        description: `The leave request for ${request.name} has been approved.`
       });
 
     } catch (error) {
-      console.error('Error updating leave status:', error);
+      console.error('Error approving leave request:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to update leave request status.'
+        description: 'Failed to approve leave request.'
+      });
+    }
+  }
+
+  const handleCancel = async (request: LeaveRequest) => {
+    if (!firestore) return;
+    
+    try {
+      // 1. Add the document to the cancelled-cto collection
+      const newDocRef = doc(firestore, 'cancelled-cto', request.id);
+      await setDoc(newDocRef, { ...request, status: 'Cancelled', remarks });
+
+      // 2. Delete the document from the old collection
+      const oldDocRef = doc(firestore, 'to-process-leave', request.id);
+      await deleteDoc(oldDocRef);
+      
+      toast({
+        title: `Request Cancelled`,
+        description: `The leave request for ${request.name} has been cancelled.`
+      });
+      setRemarks(''); // Clear remarks after submission
+
+    } catch (error) {
+      console.error('Error cancelling leave status:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to cancel leave request.'
       });
     }
   };
@@ -141,7 +170,7 @@ function ManageCtoCocTable() {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleStatusChange(request, 'Approved')}>
+                    <AlertDialogAction onClick={() => handleApprove(request)}>
                       Approve
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -157,12 +186,21 @@ function ManageCtoCocTable() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Cancel Leave Request?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will cancel the leave request for {request.name}. Are you sure?
+                      This will cancel the leave request for {request.name}. Please provide a reason for the cancellation.
                     </AlertDialogDescription>
+                    <div className="grid gap-2 pt-2">
+                        <Label htmlFor="remarks">Remarks</Label>
+                        <Textarea 
+                            id="remarks" 
+                            placeholder="Enter cancellation reason..." 
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                        />
+                    </div>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Keep Pending</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleStatusChange(request, 'Cancelled')}>
+                    <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleCancel(request)}>
                       Confirm Cancel
                     </AlertDialogAction>
                   </AlertDialogFooter>
