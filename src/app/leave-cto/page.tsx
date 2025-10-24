@@ -8,9 +8,10 @@ import {
   User,
   FileText,
   Calendar as CalendarIcon,
+  X,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -31,6 +32,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { Badge } from '@/components/ui/badge';
 
 const leaveFormSchema = z.object({
   leaveCode: z.string(),
@@ -39,15 +41,10 @@ const leaveFormSchema = z.object({
   dateOfFiling: z.date(),
   position: z.string(),
   daysApplied: z.coerce.number().min(1, 'Please enter a valid number of days.'),
-  inclusiveDates: z
-    .object({
-      from: z.date(),
-      to: z.date().optional(),
-    })
-    .refine((data) => data.to ? data.to >= data.from : true, {
-        message: "End date cannot be earlier than start date.",
-        path: ["to"],
-    }),
+  inclusiveDates: z.union([
+    z.object({ from: z.date(), to: z.date().optional() }),
+    z.array(z.date()),
+  ]),
 });
 
 type LeaveFormValues = z.infer<typeof leaveFormSchema>;
@@ -80,9 +77,28 @@ function LeaveForm() {
       daysApplied: 1,
       inclusiveDates: {
         from: new Date(),
+        to: undefined,
       },
     },
   });
+
+  const daysApplied = useWatch({
+    control: form.control,
+    name: 'daysApplied',
+  });
+
+  useEffect(() => {
+    if (daysApplied > 1) {
+      if (!Array.isArray(form.getValues('inclusiveDates'))) {
+        form.setValue('inclusiveDates', []);
+      }
+    } else {
+       if (Array.isArray(form.getValues('inclusiveDates'))) {
+        form.setValue('inclusiveDates', { from: new Date(), to: undefined });
+      }
+    }
+  }, [daysApplied, form]);
+
 
   useEffect(() => {
     if (leaveCode) {
@@ -97,9 +113,19 @@ function LeaveForm() {
       description: `Your leave request (${data.leaveCode}) has been submitted.`,
     });
     // Reset form and generate a new leave code
-    form.reset();
+    form.reset({
+        leaveCode: '',
+        officeAgency: 'PFDA-BFPC',
+        name: '',
+        dateOfFiling: new Date(),
+        position: 'Administrative Aide IV',
+        daysApplied: 1,
+        inclusiveDates: { from: new Date(), to: undefined },
+    });
     setLeaveCode(generateLeaveCode());
   }
+  
+  const selectedDates = form.watch('inclusiveDates');
 
   return (
     <Form {...form}>
@@ -218,43 +244,84 @@ function LeaveForm() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>Inclusive Date(s)</FormLabel>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <FormControl>
-                    <Button
-                      variant={'outline'}
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !field.value.from && 'text-muted-foreground'
-                      )}
-                    >
+              {daysApplied > 1 ? (
+                <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {field.value.from ? (
-                        field.value.to ? (
-                          <>
-                            {format(field.value.from, 'LLL dd, y')} -{' '}
-                            {format(field.value.to, 'LLL dd, y')}
-                          </>
-                        ) : (
-                          format(field.value.from, 'LLL dd, y')
-                        )
-                      ) : (
-                        <span>Pick a date range</span>
-                      )}
+                      <span>{Array.isArray(field.value) && field.value.length > 0 ? `Selected ${field.value.length} dates` : "Select dates"}</span>
                     </Button>
-                  </FormControl>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={field.value.from}
-                    selected={{ from: field.value.from, to: field.value.to }}
-                    onSelect={field.onChange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="multiple"
+                      selected={Array.isArray(field.value) ? field.value : []}
+                      onSelect={(dates) => field.onChange(dates || [])}
+                      initialFocus
+                      max={Number(daysApplied)}
+                    />
+                  </PopoverContent>
+                </Popover>
+                 {Array.isArray(selectedDates) && selectedDates.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {selectedDates.map((date) => (
+                        <Badge key={date.toISOString()} variant="secondary" className="flex items-center gap-1">
+                          {format(date, 'MMM d, y')}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newDates = (selectedDates as Date[]).filter(d => d.getTime() !== date.getTime());
+                              form.setValue('inclusiveDates', newDates);
+                            }}
+                            className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                 <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant={'outline'}
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !field.value && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {field.value && 'from' in field.value && field.value.from ? (
+                          field.value.to ? (
+                            <>
+                              {format(field.value.from, 'LLL dd, y')} -{' '}
+                              {format(field.value.to, 'LLL dd, y')}
+                            </>
+                          ) : (
+                            format(field.value.from, 'LLL dd, y')
+                          )
+                        ) : (
+                          <span>Pick a date</span>
+                        )}
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={field.value && 'from' in field.value ? field.value.from : undefined}
+                      selected={field.value && 'from' in field.value ? { from: field.value.from, to: field.value.to } : undefined}
+                      onSelect={field.onChange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              )}
               <FormMessage />
             </FormItem>
           )}
