@@ -258,6 +258,38 @@
         }
       },
       {
+        "path": "/processed-cto/{leaveRequestId}",
+        "definition": {
+          "entityName": "LeaveRequest",
+          "schema": {
+            "$ref": "#/backend/entities/LeaveRequest"
+          },
+          "description": "Stores all leave requests that have been approved. The 'leaveRequestId' parameter identifies the specific leave request.",
+          "params": [
+            {
+              "name": "leaveRequestId",
+              "description": "The unique identifier of the leave request."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/cancelled-cto/{leaveRequestId}",
+        "definition": {
+          "entityName": "LeaveRequest",
+          "schema": {
+            "$ref": "#/backend/entities/LeaveRequest"
+          },
+          "description": "Stores all leave requests that have been cancelled. The 'leaveRequestId' parameter identifies the specific leave request.",
+          "params": [
+            {
+              "name": "leaveRequestId",
+              "description": "The unique identifier of the leave request."
+            }
+          ]
+        }
+      },
+      {
         "path": "/employees/{employeeId}",
         "definition": {
           "entityName": "Employee",

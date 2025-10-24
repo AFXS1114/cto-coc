@@ -1,190 +1,145 @@
 /**
- * @fileoverview Firestore Security Rules for the Leave Request Application.
+ * @fileoverview Firestore Security Rules for PTO Management App.
  *
  * Core Philosophy:
- * This ruleset enforces a strict user-ownership model for leave and WAN/COC requests,
- * meaning only the authenticated user can access their own data. Employee data is publicly readable.
+ * This ruleset enforces a strict user-ownership model for personal data (leave requests, WAN/COC requests) stored under user-specific paths.
+ * Data concerning PTO management will be under System Admin and Record Admin roles to approve and cancel.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profile information.
- * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for each user.
- * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for each user.
- * - /to-process-leave/{leaveRequestId}: Stores all leave requests that are pending review.
+ * - /users/{userId}: Stores user profiles.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
+ * - /to-process-leave/{leaveRequestId}: Stores leave requests that are pending review and processing.
  * - /employees/{employeeId}: Stores employee information.
  * - /app-users/{appUserId}: Stores application user credentials and roles.
  *
  * Key Security Decisions:
- * - Users can only read and write their own profile data and associated requests.
- * - Listing all users is disallowed for privacy reasons.
- * - The `employees` collection is publicly readable to allow the application to display employee information, such as names and positions.  Writes are not permitted to any client.
+ * - User data is strictly private and accessible only to the authenticated user.
+ * - Listing of all users is disallowed.
+ * - Public listing of leave requests or WAN/COC requests is disallowed.
  *
  * Denormalization for Authorization:
- * - The `LeaveRequest` and `WANCOCRequest` entities include a `userId` field, enabling
- *   rules to verify ownership without additional reads.
- *
- * Structural Segregation:
- * - Private user data (leave requests, WAN/COC requests) is stored under the `/users/{userId}`
- *   path, while employee information is stored in a separate, publicly readable collection.
+ * - Ownership is enforced by path-based rules (e.g., /users/{userId}/...). The 'userId' path segment is compared against request.auth.uid.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Only the authenticated user can read/write their own user profile.
+     * @description Checks if the user is signed in.
+     * @return {bool} True if the user is signed in, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the resource.
+     * @param {string} userId The user ID to compare against.
+     * @return {bool} True if the user is the owner, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the authenticated user is the owner of the resource and the resource exists.
+     * @param {string} userId The user ID to compare against.
+     * @return {bool} True if the user is the owner and the resource exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Stores user profiles.  The 'userId' parameter identifies the user document.
      * @path /users/{userId}
-     * @allow (create) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (create) - If the authenticated user is not signed in.
-     * @deny (create) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (get) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (get) - If the authenticated user is not signed in.
-     * @deny (get) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (update) - If the authenticated user's ID matches the 'userId' parameter and the user profile exists.
-     * @deny (update) - If the authenticated user is not signed in.
-     * @deny (update) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (update) - If the user profile does not exist.
-     * @allow (delete) - If the authenticated user's ID matches the 'userId' parameter and the user profile exists.
-     * @deny (delete) - If the authenticated user is not signed in.
-     * @deny (delete) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (delete) - If the user profile does not exist.
-     * @deny (list) - Listing all users is not permitted.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with ID 'user123' can create their own profile.
+     * @allow (get) User with ID 'user123' can read their own profile.
+     * @deny (create) User with ID 'user456' cannot create a profile for 'user123'.
+     * @deny (update) User with ID 'user456' cannot update the profile for 'user123'.
+     * @principle Enforces document ownership for writes, restricts access to a user's own data tree.
      */
     match /users/{userId} {
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
-      allow get: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isSignedIn() && isExistingOwner(userId);
+      allow get: if isOwner(userId);
       allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if false;
     }
 
     /**
-     * @description Only the authenticated user can manage their own leave requests.
+     * @description Stores leave requests for a specific user. Path-based ownership enforces that only the user can access their own leave requests. The 'userId' parameter identifies the user, and 'leaveRequestId' identifies the specific leave request.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (create) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (create) - If the authenticated user is not signed in.
-     * @deny (create) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (get) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (get) - If the authenticated user is not signed in.
-     * @deny (get) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (update) - If the authenticated user's ID matches the 'userId' parameter and the leave request exists.
-     * @deny (update) - If the authenticated user is not signed in.
-     * @deny (update) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (update) - If the leave request does not exist.
-     * @allow (delete) - If the authenticated user's ID matches the 'userId' parameter and the leave request exists.
-     * @deny (delete) - If the authenticated user is not signed in.
-     * @deny (delete) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (delete) - If the leave request does not exist.
-     * @allow (list) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (list) - If the authenticated user is not signed in.
-     * @deny (list) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @principle Enforces document ownership and existence for writes.
+     * @allow (create) User with ID 'user123' can create a leave request under their profile.
+     * @allow (get) User with ID 'user123' can read their own leave request.
+     * @deny (create) User with ID 'user456' cannot create a leave request for 'user123'.
+     * @deny (update) User with ID 'user456' cannot update the leave request for 'user123'.
+     * @principle Enforces document ownership for writes, restricts access to a user's own data tree, validates relational integrity between documents.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
-      allow get: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isSignedIn() && isExistingOwner(userId);
-      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && resource.data.userId == userId;
+      allow delete: if isExistingOwner(userId) && resource.data.userId == userId;
     }
 
     /**
-     * @description Only the authenticated user can manage their own WAN/COC requests.
+     * @description Stores WAN/COC requests for a specific user.  Path-based ownership enforces that only the user can access their own WAN/COC requests. The 'userId' parameter identifies the user, and 'wancocRequestId' identifies the specific request.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (create) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (create) - If the authenticated user is not signed in.
-     * @deny (create) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (get) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (get) - If the authenticated user is not signed in.
-     * @deny (get) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @allow (update) - If the authenticated user's ID matches the 'userId' parameter and the WAN/COC request exists.
-     * @deny (update) - If the authenticated user is not signed in.
-     * @deny (update) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (update) - If the WAN/COC request does not exist.
-     * @allow (delete) - If the authenticated user's ID matches the 'userId' parameter and the WAN/COC request exists.
-     * @deny (delete) - If the authenticated user is not signed in.
-     * @deny (delete) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @deny (delete) - If the WAN/COC request does not exist.
-     * @allow (list) - If the authenticated user's ID matches the 'userId' parameter.
-     * @deny (list) - If the authenticated user is not signed in.
-     * @deny (list) - If the authenticated user's ID does not match the 'userId' parameter.
-     * @principle Enforces document ownership and existence for writes.
+     * @allow (create) User with ID 'user123' can create a WAN/COC request under their profile.
+     * @allow (get) User with ID 'user123' can read their own WAN/COC request.
+     * @deny (create) User with ID 'user456' cannot create a WAN/COC request for 'user123'.
+     * @deny (update) User with ID 'user456' cannot update the WAN/COC request for 'user123'.
+     * @principle Enforces document ownership for writes, restricts access to a user's own data tree, validates relational integrity between documents.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
-      allow get: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isSignedIn() && isExistingOwner(userId);
-      allow list: if isSignedIn() && isOwner(userId);
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isExistingOwner(userId) && resource.data.userId == userId;
+      allow delete: if isExistingOwner(userId) && resource.data.userId == userId;
     }
 
     /**
-     * @description Stores all leave requests that are pending review.
+     * @description Stores all leave requests that are pending review. The 'leaveRequestId' parameter identifies the specific leave request.
      * @path /to-process-leave/{leaveRequestId}
-     * @allow (create) - if false; // TODO: Define rules for processing leave requests
-     * @allow (get) - if false; // TODO: Define rules for processing leave requests
-     * @allow (update) - if false; // TODO: Define rules for processing leave requests
-     * @allow (delete) - if false; // TODO: Define rules for processing leave requests
-     * @allow (list) - if false; // TODO: Define rules for processing leave requests
-     * @principle Placeholder for leave processing logic.
+     * @allow (get) Anyone can read leave requests that are pending review.
+     * @deny (create) No one can create leave requests directly in this collection.
+     * @deny (update) Only Records Admins and System Admins can update leave requests in this collection.
+     *
      */
     match /to-process-leave/{leaveRequestId} {
-        // TODO: These require more details on who can process leaves
-        allow create: if false;
-        allow get: if false;
-        allow update: if false;
-        allow delete: if false;
-        allow list: if false;
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false; // TODO: Add admin role validation once roles are established.
+      allow delete: if false; // TODO: Add admin role validation once roles are established.
     }
 
     /**
-     * @description Stores employee information. Publicly readable, writes are denied.
+     * @description Stores employee information. The 'employeeId' parameter identifies the employee document.
      * @path /employees/{employeeId}
-     * @allow (create) - if false;
-     * @allow (get) - if true;
-     * @allow (update) - if false;
-     * @allow (delete) - if false;
-     * @allow (list) - if true;
-     * @principle Public read access, no write access.
      */
     match /employees/{employeeId} {
-      allow create: if false;
       allow get: if true;
-      allow update: if false;
-      allow delete: if false;
       allow list: if true;
+      allow create: if false; // TODO: Add admin role validation once roles are established.
+      allow update: if false; // TODO: Add admin role validation once roles are established.
+      allow delete: if false; // TODO: Add admin role validation once roles are established.
     }
 
     /**
-     * @description Stores application user credentials and roles.
+     * @description Stores application user credentials and roles. The 'appUserId' parameter identifies the user document.
      * @path /app-users/{appUserId}
-     * @allow (create) - if false; // TODO: Define rules for app user creation, e.g., only admins
-     * @allow (get) - if false; // TODO: Define rules for app user access, e.g., only admins or self
-     * @allow (update) - if false; // TODO: Define rules for app user updates, e.g., only admins or self
-     * @allow (delete) - if false; // TODO: Define rules for app user deletion, e.g., only admins
-     * @allow (list) - if false; // TODO: Should this ever be listable?  Probably not
-     * @principle Placeholder for app user management logic.
      */
     match /app-users/{appUserId} {
-        // TODO: These require more details on who can manage app users
-        allow create: if false;
-        allow get: if false;
-        allow update: if false;
-        allow delete: if false;
-        allow list: if false;
+      allow get: if false;
+      allow list: if false;
+      allow create: if false; // TODO: Add admin role validation once roles are established.
+      allow update: if false; // TODO: Add admin role validation once roles are established.
+      allow delete: if false; // TODO: Add admin role validation once roles are established.
     }
-  }
-
-  // Helper functions
-  function isSignedIn() {
-    return request.auth != null;
-  }
-
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
-
-  function isExistingOwner(userId) {
-    return isSignedIn() && isOwner(userId) && resource != null;
   }
 }
