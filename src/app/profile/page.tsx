@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -30,9 +31,9 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, BookOpen, FileText, User } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText, User, Eye, EyeOff } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface Employee {
@@ -41,9 +42,15 @@ interface Employee {
   position: string;
 }
 
+interface AppUser extends DocumentData {
+    employeeId: string;
+    password?: string;
+}
+
+
 const loginSchema = z.object({
   employeeName: z.string().min(1, { message: 'Please select your name.' }),
-  employeeId: z.string().regex(/^\d{4}-\d{2}$/, 'ID No. must be in the format ####-##.'),
+  password: z.string().min(1, { message: 'Password is required.'}),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -53,34 +60,71 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
   const firestore = useFirestore();
   const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
   const { data: employees, isLoading } = useCollection<Employee>(employeesQuery);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       employeeName: '',
-      employeeId: '',
+      password: '',
     },
   });
 
-  const onSubmit = (data: LoginFormValues) => {
+  const onSubmit = async (data: LoginFormValues) => {
     if (!firestore || !employees) return;
 
     const selectedEmployee = employees.find(e => e.name === data.employeeName);
     
-    if (selectedEmployee && selectedEmployee.id === data.employeeId) {
-      toast({
-        title: 'Login Successful',
-        description: `Welcome, ${selectedEmployee.name}!`,
-      });
-      onLoginSuccess(selectedEmployee);
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Login Failed',
-        description: 'The selected name and ID No. do not match. Please try again.',
-      });
-      form.resetField('employeeId');
+    if (!selectedEmployee) {
+        toast({
+            variant: 'destructive',
+            title: 'Login Failed',
+            description: 'Could not find the selected employee.',
+        });
+        return;
     }
+    
+    try {
+        const appUsersCollectionRef = collection(firestore, 'app-users');
+        const q = query(appUsersCollectionRef, where("employeeId", "==", selectedEmployee.id));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            toast({
+                variant: 'destructive',
+                title: 'Login Failed',
+                description: 'No app user found for this employee.',
+            });
+            return;
+        }
+
+        const appUserDoc = querySnapshot.docs[0];
+        const appUserData = appUserDoc.data() as AppUser;
+        
+        if (appUserData.password === data.password) {
+            toast({
+                title: 'Login Successful',
+                description: `Welcome, ${selectedEmployee.name}!`,
+            });
+            onLoginSuccess(selectedEmployee);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Login Failed',
+                description: 'Incorrect password. Please try again.',
+            });
+            form.resetField('password');
+        }
+
+    } catch (error) {
+        console.error("Error verifying app user:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Login Error',
+            description: 'An error occurred while trying to log you in.',
+        });
+    }
+
   };
   
   if (isLoading) {
@@ -92,7 +136,7 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
       <CardHeader>
         <CardTitle className="text-3xl font-headline">Profile Verification</CardTitle>
         <CardDescription>
-          Please select your name and enter your ID number to access your profile.
+          Please select your name and enter your password to access your profile.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -124,12 +168,27 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
             />
             <FormField
               control={form.control}
-              name="employeeId"
+              name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>ID No. (as Password)</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Enter your ID No. (e.g., 1234-56)" {...field} />
+                  <FormLabel>Password</FormLabel>
+                   <FormControl>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter your password"
+                        {...field}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute inset-y-0 right-0 h-full"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </Button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
