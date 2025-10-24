@@ -145,6 +145,36 @@
         "name",
         "position"
       ]
+    },
+    "AppUser": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AppUser",
+      "type": "object",
+      "description": "Represents an application user with credentials and a role.",
+      "properties": {
+        "employeeId": {
+          "type": "string",
+          "description": "The ID of the linked employee."
+        },
+        "password": {
+          "type": "string",
+          "description": "The user's password (should be hashed)."
+        },
+        "restrictionLevel": {
+          "type": "string",
+          "enum": [
+            "Employee",
+            "System Admin",
+            "Records Admin"
+          ],
+          "description": "The user's access level."
+        }
+      },
+      "required": [
+        "employeeId",
+        "password",
+        "restrictionLevel"
+      ]
     }
   },
   "auth": {
@@ -239,6 +269,22 @@
             {
               "name": "employeeId",
               "description": "The unique identifier for the employee."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/app-users/{appUserId}",
+        "definition": {
+          "entityName": "AppUser",
+          "schema": {
+            "$ref": "#/backend/entities/AppUser"
+          },
+          "description": "Stores application user credentials and roles. The 'appUserId' parameter identifies the user document.",
+          "params": [
+            {
+              "name": "appUserId",
+              "description": "The unique identifier for the app user."
             }
           ]
         }
