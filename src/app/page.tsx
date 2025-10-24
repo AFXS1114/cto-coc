@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { FileText, Globe, ArrowRight, BookUser } from 'lucide-react';
+import { FileText, Globe, ArrowRight, BookUser, Settings } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -25,12 +25,12 @@ export default function Home() {
             Choose a form to file. Your gateway to managing administrative tasks efficiently.
           </p>
         </div>
-        <div className="grid w-full max-w-4xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
           <Link href="/leave-cto" className="group">
             <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
               <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-2xl font-headline">
-                  <FileText className="h-8 w-8 text-primary" />
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <FileText className="h-7 w-7 text-primary" />
                   File Leave/CTO
                 </CardTitle>
               </CardHeader>
@@ -47,8 +47,8 @@ export default function Home() {
           <Link href="/wan-coc" className="group">
             <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
               <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-2xl font-headline">
-                  <Globe className="h-8 w-8 text-primary" />
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <Globe className="h-7 w-7 text-primary" />
                   File WAN/COC
                 </CardTitle>
               </CardHeader>
@@ -65,14 +65,32 @@ export default function Home() {
           <Link href="/manage-cto-coc" className="group">
             <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
               <CardHeader>
-                <CardTitle className="flex items-center gap-3 text-2xl font-headline">
-                  <BookUser className="h-8 w-8 text-primary" />
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <BookUser className="h-7 w-7 text-primary" />
                   Manage CTO/COC
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <CardDescription>
                   View and manage your submitted Compensatory Time Off and Change of Custody requests.
+                </CardDescription>
+                <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
+                  Go to page <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/settings" className="group">
+            <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <Settings className="h-7 w-7 text-primary" />
+                  Settings
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Access and configure application settings and preferences.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to page <ArrowRight className="ml-2 h-4 w-4" />
