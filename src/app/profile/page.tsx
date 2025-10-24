@@ -106,6 +106,8 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
                 title: 'Login Successful',
                 description: `Welcome, ${selectedEmployee.name}!`,
             });
+            // Store employee data in sessionStorage
+            sessionStorage.setItem('loggedInEmployee', JSON.stringify(selectedEmployee));
             onLoginSuccess(selectedEmployee);
         } else {
             toast({
@@ -265,8 +267,18 @@ export default function ProfilePage() {
   const [loggedInEmployee, setLoggedInEmployee] = useState<Employee | null>(null);
 
   const handleLogout = () => {
+      // Clear sessionStorage on logout
+      sessionStorage.removeItem('loggedInEmployee');
       setLoggedInEmployee(null);
   }
+
+  // On initial render, check if employee data is in sessionStorage
+  useEffect(() => {
+    const employeeData = sessionStorage.getItem('loggedInEmployee');
+    if (employeeData) {
+      setLoggedInEmployee(JSON.parse(employeeData));
+    }
+  }, []);
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
