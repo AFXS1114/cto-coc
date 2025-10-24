@@ -9,6 +9,7 @@ import {
   FileText,
   Calendar as CalendarIcon,
   X,
+  ChevronsUpDown,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -28,14 +29,29 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { collection } from 'firebase/firestore';
+import { collection, DocumentData } from 'firebase/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
+
+interface Employee {
+    id: string;
+    name: string;
+    position: string;
+}
 
 const leaveFormSchema = z.object({
   leaveCode: z.string(),
@@ -61,7 +77,84 @@ function generateLeaveCode() {
   return result;
 }
 
-function LeaveForm() {
+function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: Employee) => void }) {
+  const firestore = useFirestore();
+  const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
+  const { data: employees, isLoading } = useCollection<Employee>(employeesQuery);
+  const [open, setOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
+  const handleSelect = (employee: Employee) => {
+    setSelectedEmployee(employee);
+    onEmployeeSelect(employee);
+    setOpen(false);
+  };
+
+  if (isLoading) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-3xl font-headline">Select Employee</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                </div>
+            </CardContent>
+        </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-3xl font-headline">Select Employee</CardTitle>
+        <p className="text-muted-foreground">Choose your name from the list to begin filing your leave.</p>
+      </CardHeader>
+      <CardContent>
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-full justify-between"
+            >
+              {selectedEmployee
+                ? selectedEmployee.name
+                : "Select an employee..."}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+            <Command>
+              <CommandInput placeholder="Search employee..." />
+              <CommandList>
+                <CommandEmpty>No employee found.</CommandEmpty>
+                <CommandGroup>
+                  {employees?.map((employee) => (
+                    <CommandItem
+                      key={employee.id}
+                      value={employee.name}
+                      onSelect={() => handleSelect(employee)}
+                    >
+                      <User className="mr-2 h-4 w-4" />
+                      {employee.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => void }) {
   const { toast } = useToast();
   const [leaveCode, setLeaveCode] = useState('');
   const firestore = useFirestore();
@@ -75,9 +168,9 @@ function LeaveForm() {
     defaultValues: {
       leaveCode: '',
       officeAgency: 'PFDA-BFPC',
-      name: '',
+      name: employee?.name || '',
       dateOfFiling: new Date(),
-      position: 'Administrative Aide IV',
+      position: employee?.position || 'Administrative Aide IV',
       daysApplied: 1,
       inclusiveDates: {
         from: new Date(),
@@ -110,6 +203,13 @@ function LeaveForm() {
     }
   }, [leaveCode, form]);
 
+  useEffect(() => {
+    if(employee) {
+        form.setValue('name', employee.name);
+        form.setValue('position', employee.position);
+    }
+  }, [employee, form]);
+
   function onSubmit(data: LeaveFormValues) {
     const inclusiveDatesFormatted = Array.isArray(data.inclusiveDates)
     ? data.inclusiveDates.map(date => format(date, 'yyyy-MM-dd'))
@@ -140,222 +240,225 @@ function LeaveForm() {
       description: `Your leave request (${data.leaveCode}) has been submitted.`,
     });
     
-    form.reset({
-        leaveCode: '',
-        officeAgency: 'PFDA-BFPC',
-        name: '',
-        dateOfFiling: new Date(),
-        position: 'Administrative Aide IV',
-        daysApplied: 1,
-        inclusiveDates: { from: new Date(), to: undefined },
-    });
-    setLeaveCode(generateLeaveCode());
+    onBack();
   }
   
   const selectedDates = form.watch('inclusiveDates');
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="leaveCode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Leave Code</FormLabel>
-                <FormControl>
-                  <Input {...field} readOnly className="bg-muted" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="officeAgency"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Office/Agency</FormLabel>
-                <FormControl>
-                  <Input {...field} readOnly className="bg-muted" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="Enter your full name" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="dateOfFiling"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Date of Filing</FormLabel>
-                 <Popover>
-                  <PopoverTrigger asChild>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-3xl font-headline">
+          File Leave/CTO
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="leaveCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Leave Code</FormLabel>
                     <FormControl>
-                      <Button
-                        variant={'outline'}
-                        className={cn(
-                          'w-full text-left font-normal',
-                          !field.value && 'text-muted-foreground'
-                        )}
-                      >
-                        {field.value ? (
-                          format(field.value, 'PPP')
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
+                      <Input {...field} readOnly className="bg-muted" />
                     </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date('1900-01-01')
-                      }
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="position"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Position</FormLabel>
-                <FormControl>
-                  <Input {...field} readOnly className="bg-muted" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="daysApplied"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>No. of Days Applied for</FormLabel>
-                <FormControl>
-                  <Input type="number" {...field} min="1" />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        <FormField
-          control={form.control}
-          name="inclusiveDates"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Inclusive Date(s)</FormLabel>
-              {daysApplied > 1 ? (
-                <>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      <span>{Array.isArray(field.value) && field.value.length > 0 ? `Selected ${field.value.length} dates` : "Select dates"}</span>
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="multiple"
-                      selected={Array.isArray(field.value) ? field.value : []}
-                      onSelect={(dates) => field.onChange(dates || [])}
-                      initialFocus
-                      max={Number(daysApplied)}
-                    />
-                  </PopoverContent>
-                </Popover>
-                 {Array.isArray(selectedDates) && selectedDates.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {selectedDates.map((date) => (
-                        <Badge key={date.toISOString()} variant="secondary" className="flex items-center gap-1">
-                          {format(date, 'MMM d, y')}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const newDates = (selectedDates as Date[]).filter(d => d.getTime() !== date.getTime());
-                              form.setValue('inclusiveDates', newDates);
-                            }}
-                            className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="officeAgency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Office/Agency</FormLabel>
+                    <FormControl>
+                      <Input {...field} readOnly className="bg-muted" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input {...field} readOnly className="bg-muted"/>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="dateOfFiling"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Filing</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'w-full text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
                           >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                 <Popover>
-                  <PopoverTrigger asChild>
+                            {field.value ? (
+                              format(field.value, 'PPP')
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date('1900-01-01')
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="position"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Position</FormLabel>
                     <FormControl>
-                      <Button
-                        variant={'outline'}
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !field.value && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {field.value && 'from' in field.value && field.value.from ? (
-                          field.value.to ? (
-                            <>
-                              {format(field.value.from, 'LLL dd, y')} -{' '}
-                              {format(field.value.to, 'LLL dd, y')}
-                            </>
-                          ) : (
-                            format(field.value.from, 'LLL dd, y')
-                          )
-                        ) : (
-                          <span>Pick a date</span>
-                        )}
-                      </Button>
+                      <Input {...field} readOnly className="bg-muted" />
                     </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={field.value && 'from' in field.value ? field.value.from : undefined}
-                      selected={field.value && 'from' in field.value ? { from: field.value.from, to: field.value.to } : undefined}
-                      onSelect={field.onChange}
-                      numberOfMonths={2}
-                    />
-                  </PopoverContent>
-                </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="daysApplied"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>No. of Days Applied for</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} min="1" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="inclusiveDates"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Inclusive Date(s)</FormLabel>
+                  {daysApplied > 1 ? (
+                    <>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          <span>{Array.isArray(field.value) && field.value.length > 0 ? `Selected ${field.value.length} dates` : "Select dates"}</span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="multiple"
+                          selected={Array.isArray(field.value) ? field.value : []}
+                          onSelect={(dates) => field.onChange(dates || [])}
+                          initialFocus
+                          max={Number(daysApplied)}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {Array.isArray(selectedDates) && selectedDates.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {selectedDates.map((date) => (
+                            <Badge key={date.toISOString()} variant="secondary" className="flex items-center gap-1">
+                              {format(date, 'MMM d, y')}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newDates = (selectedDates as Date[]).filter(d => d.getTime() !== date.getTime());
+                                  form.setValue('inclusiveDates', newDates);
+                                }}
+                                className="rounded-full hover:bg-muted-foreground/20 p-0.5"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'w-full justify-start text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value && 'from' in field.value && field.value.from ? (
+                              field.value.to ? (
+                                <>
+                                  {format(field.value.from, 'LLL dd, y')} -{' '}
+                                  {format(field.value.to, 'LLL dd, y')}
+                                </>
+                              ) : (
+                                format(field.value.from, 'LLL dd, y')
+                              )
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={field.value && 'from' in field.value ? field.value.from : undefined}
+                          selected={field.value && 'from' in field.value ? { from: field.value.from, to: field.value.to } : undefined}
+                          onSelect={field.onChange}
+                          numberOfMonths={2}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                  <FormMessage />
+                </FormItem>
               )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <Button type="submit" className="w-full">Submit Application</Button>
-      </form>
-    </Form>
+            />
+             <div className="flex gap-4">
+                <Button variant="outline" onClick={onBack} className="w-full">Back</Button>
+                <Button type="submit" className="w-full">Submit Application</Button>
+            </div>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -388,20 +491,17 @@ function Navbar() {
 }
 
 export default function LeaveCtoPage() {
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
       <Navbar />
       <main className="w-full max-w-2xl mt-16">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-3xl font-headline">
-              File Leave/CTO
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LeaveForm />
-          </CardContent>
-        </Card>
+        {!selectedEmployee ? (
+            <EmployeeSelector onEmployeeSelect={setSelectedEmployee} />
+        ) : (
+            <LeaveForm employee={selectedEmployee} onBack={() => setSelectedEmployee(null)} />
+        )}
       </main>
     </div>
   );
