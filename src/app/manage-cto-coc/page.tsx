@@ -33,7 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, CheckCircle, Search, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -178,7 +178,12 @@ function ManageCtoCocTable() {
                 <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                 <TableCell>{request.daysApplied}</TableCell>
                 <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
-                <TableCell className="text-right space-x-2">
+                <TableCell className="text-right space-x-1">
+                  <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                    <Link href={`/leave-cto/print/${request.id}`} target="_blank" rel="noopener noreferrer">
+                      <Eye className="h-5 w-5" />
+                    </Link>
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700">
