@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "LeaveRequest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LeaveRequest",
+      "type": "object",
+      "description": "Represents a leave request submitted through the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the leave request."
+        },
+        "requestType": {
+          "type": "string",
+          "description": "Type of request: 'Leave' or 'CTO'."
+        },
+        "submittedDate": {
+          "type": "string",
+          "description": "Date the leave request was submitted.",
+          "format": "date-time"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Start date of the leave period.",
+          "format": "date"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "End date of the leave period.",
+          "format": "date"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for the leave request."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the leave request (e.g., 'Pending', 'Approved', 'Rejected')."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N LeaveRequest)"
+        }
+      },
+      "required": [
+        "id",
+        "requestType",
+        "submittedDate",
+        "startDate",
+        "endDate",
+        "reason",
+        "status",
+        "userId"
+      ]
+    },
+    "WANCOCRequest": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WANCOCRequest",
+      "type": "object",
+      "description": "Represents a WAN/COC request submitted through the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the WAN/COC request."
+        },
+        "requestType": {
+          "type": "string",
+          "description": "Type of request: 'WAN' or 'COC'."
+        },
+        "submittedDate": {
+          "type": "string",
+          "description": "Date the WAN/COC request was submitted.",
+          "format": "date-time"
+        },
+        "details": {
+          "type": "string",
+          "description": "Details regarding the WAN/COC request."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the WAN/COC request (e.g., 'Pending', 'Approved', 'Rejected')."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:N WANCOCRequest)"
+        }
+      },
+      "required": [
+        "id",
+        "requestType",
+        "submittedDate",
+        "details",
+        "status",
+        "userId"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "username": {
+          "type": "string",
+          "description": "Username of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "username",
+        "email"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles.  The 'userId' parameter identifies the user document.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/leave_requests/{leaveRequestId}",
+        "definition": {
+          "entityName": "LeaveRequest",
+          "schema": {
+            "$ref": "#/backend/entities/LeaveRequest"
+          },
+          "description": "Stores leave requests for a specific user. Path-based ownership enforces that only the user can access their own leave requests. The 'userId' parameter identifies the user, and 'leaveRequestId' identifies the specific leave request.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "leaveRequestId",
+              "description": "The unique identifier of the leave request."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/wancoc_requests/{wancocRequestId}",
+        "definition": {
+          "entityName": "WANCOCRequest",
+          "schema": {
+            "$ref": "#/backend/entities/WANCOCRequest"
+          },
+          "description": "Stores WAN/COC requests for a specific user.  Path-based ownership enforces that only the user can access their own WAN/COC requests. The 'userId' parameter identifies the user, and 'wancocRequestId' identifies the specific request.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "wancocRequestId",
+              "description": "The unique identifier of the WAN/COC request."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to store leave and WAN/COC requests, associating them with users.  The structure prioritizes path-based ownership for simplicity and security. Specifically, all `LeaveRequest` and `WANCOCRequest` documents are stored under a user-specific subcollection, enabling simple security rules based on `request.auth.uid`. This eliminates the need for complex `get()` calls in security rules, enabling Authorization Independence and supporting atomic operations.\n\nTo further enhance clarity and QAPs (Rules are not Filters), the `leave_requests` and `wancoc_requests` are stored in dedicated collections. This segregation ensures a homogeneous security posture, as all documents within each collection share the same access requirements.\n\nThe paths enforce clear ownership and enable efficient queries for a user's requests."
+  }
+}
