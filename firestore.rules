@@ -1,134 +1,139 @@
+/**
+ * @fileoverview Firestore Security Rules for the Leave Request Application.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a strict user-ownership model for personal data (leave requests, WAN/COC requests)
+ * and restricts access to sensitive employee and app user data. It allows public read access to a
+ * collection of leave requests that need to be processed, assuming an internal mechanism will ensure
+ * sensitive data isn't exposed.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profiles, accessible only to the user themselves.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests, accessible only to the user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests, accessible only to the user.
+ * - /to-process-leave/{leaveRequestId}: Stores all leave requests that are pending review.
+ * - /employees/{employeeId}: Stores employee information, restricted to authorized personnel.
+ * - /app-users/{appUserId}: Stores application user credentials, restricted to authorized personnel.
+ *
+ * Key Security Decisions:
+ * - Users can only access their own profile and requests.
+ * - Listing of users is disallowed.
+ * - Employee and AppUser data is strictly controlled.
+ * - The /to-process-leave collection is publicly readable, which relies on the assumption that
+ *   no sensitive user-specific data is stored directly within those documents.
+ *
+ * Denormalization for Authorization:
+ *  All request documents include a `userId` field, enabling rules to directly check ownership without
+ *  requiring additional `get()` calls.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces that only the authenticated user can read and write their own user document.
+     * @description Defines a function to check if the current user is signed in.
+     * @principle Requires authentication for certain operations.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * @description Defines a function to check if the current user is the owner of the resource.
+     * @principle Enforces user-based ownership.
+     */
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    /**
+     * @description Defines a function to check if the current user is the owner of the resource, and that the resource exists.
+     * @principle Enforces user-based ownership.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && exists(/databases/$(database)/documents/users/$(userId));
+    }
+
+
+    /**
+     * @description Controls access to user profile documents.
      * @path /users/{userId}
-     * @allow (create) - Authenticated user creates their own profile with matching userId.
-     * @allow (get, list, update, delete) - Authenticated user reads/modifies their own profile.
-     * @deny (create) - Authenticated user attempts to create a profile with a mismatched userId.
-     * @principle Enforces document ownership for all operations.
+     * @allow (read, write) User with ID 'user123' can read/write their own profile.
+     * @deny (read, write) User with ID 'user456' cannot read/write user 'user123' profile.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      // Verified authentication
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Access control function: is the user the owner?
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      // Access control function: is the user the owner, and does the document exist?
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
-
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
 
     /**
-     * @description Enforces that only the owner can read and write their own leave requests.
+     * @description Controls access to leave request documents for a specific user.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (create) - Authenticated user creates a leave request under their own user ID.
-     * @allow (get, list, update, delete) - Authenticated user reads/modifies their own leave requests.
-     * @deny (create) - Authenticated user attempts to create a leave request under another user's ID.
-     * @principle Enforces document ownership for writes and prevents unauthorized access.
+     * @allow (read, write) User with ID 'user123' can read/write their own leave requests.
+     * @deny (read, write) User with ID 'user456' cannot read/write leave requests of user 'user123'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
-      // Verified authentication
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Access control function: is the user the owner?
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      // Access control function: is the user the owner, and does the document exist?
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
-
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.get("userId", "");
+      allow update: if isOwner(userId) && request.resource.data.get("userId", "") == userId;
+      allow delete: if isOwner(userId) && request.resource.data.get("userId", "") == userId;
     }
 
     /**
-     * @description Enforces that only the owner can read and write their own WAN/COC requests.
+     * @description Controls access to WAN/COC request documents for a specific user.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (create) - Authenticated user creates a WAN/COC request under their own user ID.
-     * @allow (get, list, update, delete) - Authenticated user reads/modifies their own WAN/COC requests.
-     * @deny (create) - Authenticated user attempts to create a WAN/COC request under another user's ID.
-     * @principle Enforces document ownership for writes and prevents unauthorized access.
+     * @allow (read, write) User with ID 'user123' can read/write their own WAN/COC requests.
+     * @deny (read, write) User with ID 'user456' cannot read/write WAN/COC requests of user 'user123'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
-      // Verified authentication
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
-      // Access control function: is the user the owner?
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      // Access control function: is the user the owner, and does the document exist?
-      function isExistingOwner(userId) {
-        return isOwner(userId) && exists(resource);
-      }
-
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.get("userId", "") == userId;
+      allow update: if isOwner(userId) && request.resource.data.get("userId", "") == userId;
+      allow delete: if isOwner(userId) && request.resource.data.get("userId", "") == userId;
     }
 
     /**
-     * @description Allows anyone to read and write leave requests pending review.
+     * @description Controls access to leave requests pending processing.
      * @path /to-process-leave/{leaveRequestId}
-     * @allow (get, list, create, update, delete) - Any user can read, create, update, and delete leave requests.
-     * @principle Public read and write access for processing leave requests.
+     * @allow (read) Any user can read leave requests that need to be processed.
+     * @deny (write) No user can write to these documents directly.
+     * @principle Allows public read access for pending leave requests, assuming no sensitive data is exposed.
      */
     match /to-process-leave/{leaveRequestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow read: if true;
+      allow write: if false;
     }
 
     /**
-     * @description Allows public read access to employee data, but restricts write access to authenticated users.
+     * @description Controls access to employee information.
      * @path /employees/{employeeId}
-     * @allow (get, list) - Any user can read employee data.
-     * @allow (create, update, delete) - Only authenticated users can modify employee data.
-     * @deny (create, update, delete) - Unauthenticated users cannot modify employee data.
-     * @principle Public read access with authenticated write control.
+     * @allow (read) Authorized personnel can read employee information.
+     * @deny (write) No direct writes allowed to employee documents.
      */
     match /employees/{employeeId} {
-      // Verified authentication
-      function isSignedIn() {
-        return request.auth != null;
-      }
+      allow get: if false; // TODO: Add authorization check for admin roles
+      allow list: if false; // TODO: Add authorization check for admin roles
+      allow create, update, delete: if false; // TODO: Add authorization check for admin roles
+    }
 
-      allow get, list: if true;
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+    /**
+     * @description Controls access to application user credentials.
+     * @path /app-users/{appUserId}
+     * @allow (read) Authorized personnel can read application user credentials.
+     * @deny (write) No direct writes allowed to application user documents.
+     */
+    match /app-users/{appUserId} {
+      allow get: if false; // TODO: Add authorization check for admin roles
+      allow list: if false; // TODO: Add authorization check for admin roles
+      allow create, update, delete: if false; // TODO: Add authorization check for admin roles
     }
   }
 }
