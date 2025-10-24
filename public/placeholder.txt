@@ -1,0 +1,1 @@
+This directory is for your static assets, like images and fonts. Please place your logo file here.

@@ -79,7 +79,7 @@ export default function PrintLeavePage() {
           <div className="p-2 sm:p-4 md:p-8">
             <header className="text-center mb-6">
                  <div className="flex justify-center items-center mb-2">
-                    <Image src="https://www.bfpc.gov.ph/images/logo-trans.png" alt="Logo" width={60} height={60} />
+                    <Image src="/logo.png" alt="Logo" width={60} height={60} />
                 </div>
               <p className="text-xs">Republic of the Philippines</p>
               <p className="text-xs">Department of Agriculture</p>
