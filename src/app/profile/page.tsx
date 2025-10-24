@@ -62,10 +62,11 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
     },
   });
 
-  const onSubmit = async (data: LoginFormValues) => {
-    if (!firestore) return;
+  const onSubmit = (data: LoginFormValues) => {
+    if (!firestore || !employees) return;
 
-    const selectedEmployee = employees?.find(e => e.name === data.employeeName);
+    const selectedEmployee = employees.find(e => e.name === data.employeeName);
+    
     if (selectedEmployee && selectedEmployee.id === data.employeeId) {
       toast({
         title: 'Login Successful',
