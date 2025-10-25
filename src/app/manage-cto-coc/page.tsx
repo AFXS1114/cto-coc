@@ -59,6 +59,9 @@ interface LeaveRequest extends DocumentData {
   dateOfFiling: string;
   daysApplied: number;
   inclusiveDates: { from: string; to?: string } | string[];
+  status?: 'Pending' | 'Approved' | 'Cancelled';
+  attachedWanCodes?: string[];
+  remarks?: string;
 }
 
 interface WanRequest extends DocumentData {
@@ -349,7 +352,7 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                         </div>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
+                        <Button variant="outline" onClick={() => setRemarks('')}>Keep Pending</Button>
                         <AlertDialogAction onClick={() => handleCancel(request)}>
                           Confirm Cancel
                         </AlertDialogAction>
@@ -451,13 +454,106 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
   );
 }
 
+function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { approvedRequests: LeaveRequest[] | null, cancelledRequests: LeaveRequest[] | null, isLoading: boolean }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState('approved');
+
+    const filteredApproved = useMemo(() => {
+        if (!approvedRequests) return [];
+        return approvedRequests.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [approvedRequests, searchTerm]);
+
+    const filteredCancelled = useMemo(() => {
+        if (!cancelledRequests) return [];
+        return cancelledRequests.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [cancelledRequests, searchTerm]);
+
+    return (
+        <div>
+            <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                placeholder="Search by name or leave code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                />
+            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="approved">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="approved">Approved</TabsTrigger>
+                    <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                </TabsList>
+                <TabsContent value="approved">
+                    {isLoading ? <Skeleton className="h-48 w-full" /> : 
+                     filteredApproved.length === 0 ? <p className="text-center text-muted-foreground py-4">No approved requests found.</p> :
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Leave Code</TableHead>
+                                <TableHead>Employee Name</TableHead>
+                                <TableHead>Date Filed</TableHead>
+                                <TableHead>Attached WANs</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredApproved.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell className="font-mono">{request.id}</TableCell>
+                                    <TableCell>{request.name}</TableCell>
+                                    <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                                            <Link href={`/leave-cto/print/${request.id}`} target="_blank" rel="noopener noreferrer">
+                                                <Eye className="h-5 w-5" />
+                                            </Link>
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    }
+                </TabsContent>
+                <TabsContent value="cancelled">
+                     {isLoading ? <Skeleton className="h-48 w-full" /> : 
+                     filteredCancelled.length === 0 ? <p className="text-center text-muted-foreground py-4">No cancelled requests found.</p> :
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Leave Code</TableHead>
+                                <TableHead>Employee Name</TableHead>
+                                <TableHead>Date Filed</TableHead>
+                                <TableHead>Remarks</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredCancelled.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell className="font-mono">{request.id}</TableCell>
+                                    <TableCell>{request.name}</TableCell>
+                                    <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{request.remarks || 'N/A'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    }
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
 
 export default function ManageCtoCocPage() {
     const firestore = useFirestore();
+
     const pendingLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'to-process-leave'),
         [firestore]
-      );
+    );
     const { data: pendingRequests, isLoading: isLoadingPending } = useCollection<LeaveRequest>(pendingLeaveQuery);
 
     const filedWanQuery = useMemoFirebase(
@@ -465,6 +561,18 @@ export default function ManageCtoCocPage() {
         [firestore]
     );
     const { data: filedWanRequests, isLoading: isLoadingWan } = useCollection<WanRequest>(filedWanQuery);
+
+    const approvedLeaveQuery = useMemoFirebase(
+        () => collection(firestore, 'processed-cto'),
+        [firestore]
+    );
+    const { data: approvedRequests, isLoading: isLoadingApproved } = useCollection<LeaveRequest>(approvedLeaveQuery);
+
+    const cancelledLeaveQuery = useMemoFirebase(
+        () => collection(firestore, 'cancelled-cto'),
+        [firestore]
+    );
+    const { data: cancelledRequests, isLoading: isLoadingCancelled } = useCollection<LeaveRequest>(cancelledLeaveQuery);
 
 
   return (
@@ -498,8 +606,12 @@ export default function ManageCtoCocPage() {
               <TabsContent value="filed-wan" className="pt-4">
                 <FiledWanTable wanRequests={filedWanRequests} isLoading={isLoadingWan} />
               </TabsContent>
-              <TabsContent value="cto-coc-records">
-                <p className="text-center text-muted-foreground py-4">Content for CTO/COC Records will be added later.</p>
+              <TabsContent value="cto-coc-records" className="pt-4">
+                <ProcessedRecords 
+                    approvedRequests={approvedRequests} 
+                    cancelledRequests={cancelledRequests}
+                    isLoading={isLoadingApproved || isLoadingCancelled}
+                />
               </TabsContent>
             </Tabs>
             <Button asChild variant="link" className="mt-6 w-full">
@@ -514,5 +626,3 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
-
-    
