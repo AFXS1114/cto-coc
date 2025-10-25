@@ -46,7 +46,7 @@ export default function PrintWanPage() {
   };
 
   const inclusivePeriod = wanData?.inclusiveTimes
-    .map(t => `${formatTime(t.from)} / ${formatTime(t.to)}`)
+    .map(t => `${formatTime(t.from)} - ${formatTime(t.to)}`)
     .join(', ');
 
   if (isLoading) {
