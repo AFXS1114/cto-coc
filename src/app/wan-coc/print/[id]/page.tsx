@@ -72,7 +72,7 @@ export default function PrintWanPage() {
                 <header className="text-center mb-6">
                     <h1 className="font-bold text-lg tracking-wider">PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</h1>
                     <h2 className="font-bold text-lg tracking-wider mt-4">WORK ASSIGNMENT NOTICE</h2>
-                    <div className="text-right font-bold mt-[-2rem]">
+                    <div className="text-right font-bold mt-[-2rem] text-sm">
                         <p>WAN Code: <span className="underline">{wanData.id}</span></p>
                     </div>
                 </header>
