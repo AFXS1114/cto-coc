@@ -31,12 +31,21 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2 } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from '@/components/ui/table';
+import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 interface Employee {
   id: string;
@@ -49,6 +58,14 @@ interface AppUser extends DocumentData {
     password?: string;
 }
 
+interface LeaveRecord extends DocumentData {
+  id: string;
+  submittedDate: string;
+  daysApplied: number;
+  inclusiveDates: { from: string; to?: string } | string[];
+  status: 'Pending' | 'Approved' | 'Cancelled';
+  remarks?: string;
+}
 
 const loginSchema = z.object({
   employeeName: z.string().min(1, { message: 'Please select your name.' }),
@@ -108,7 +125,6 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
                 title: 'Login Successful',
                 description: `Welcome, ${selectedEmployee.name}!`,
             });
-            // Store employee data in sessionStorage
             sessionStorage.setItem('loggedInEmployee', JSON.stringify(selectedEmployee));
             onLoginSuccess(selectedEmployee);
         } else {
@@ -214,6 +230,100 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
   );
 }
 
+
+const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
+    if (Array.isArray(dates)) {
+        return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
+    }
+    if (typeof dates === 'object' && dates.from) {
+        if (dates.to) {
+            return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
+        }
+        return format(new Date(dates.from), 'MMM d, yyyy');
+    }
+    return 'N/A';
+};
+
+
+function LeaveRecordsTable({ employee }: { employee: Employee }) {
+  const firestore = useFirestore();
+
+  const pendingQuery = useMemoFirebase(() => {
+    if (!firestore || !employee) return null;
+    return query(collection(firestore, 'to-process-leave'), where('name', '==', employee.name));
+  }, [firestore, employee]);
+
+  const approvedQuery = useMemoFirebase(() => {
+    if (!firestore || !employee) return null;
+    return query(collection(firestore, 'processed-cto'), where('name', '==', employee.name));
+  }, [firestore, employee]);
+
+  const cancelledQuery = useMemoFirebase(() => {
+    if (!firestore || !employee) return null;
+    return query(collection(firestore, 'cancelled-cto'), where('name', '==', employee.name));
+  }, [firestore, employee]);
+
+  const { data: pending, isLoading: pendingLoading } = useCollection<LeaveRecord>(pendingQuery);
+  const { data: approved, isLoading: approvedLoading } = useCollection<LeaveRecord>(approvedQuery);
+  const { data: cancelled, isLoading: cancelledLoading } = useCollection<LeaveRecord>(cancelledQuery);
+
+  const isLoading = pendingLoading || approvedLoading || cancelledLoading;
+
+  const allRecords: LeaveRecord[] = [
+    ...(pending?.map(r => ({ ...r, status: 'Pending' as const })) || []),
+    ...(approved?.map(r => ({ ...r, status: 'Approved' as const })) || []),
+    ...(cancelled?.map(r => ({ ...r, status: 'Cancelled' as const })) || []),
+  ].sort((a, b) => new Date(b.submittedDate).getTime() - new Date(a.submittedDate).getTime());
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+    );
+  }
+
+  if (allRecords.length === 0) {
+    return <p className="text-center text-muted-foreground">You have no leave records.</p>;
+  }
+
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Date Filed</TableHead>
+          <TableHead className="text-center">No. of Days</TableHead>
+          <TableHead>Inclusive Dates</TableHead>
+          <TableHead>Remarks</TableHead>
+          <TableHead className="text-right">Status</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {allRecords.map((record) => (
+          <TableRow key={record.id}>
+            <TableCell>{format(new Date(record.submittedDate), 'MMM dd, yyyy')}</TableCell>
+            <TableCell className="text-center">{record.daysApplied}</TableCell>
+            <TableCell>{formatDateRange(record.inclusiveDates)}</TableCell>
+            <TableCell>{record.remarks || 'N/A'}</TableCell>
+            <TableCell className="text-right">
+                <Badge variant={
+                    record.status === 'Approved' ? 'default' :
+                    record.status === 'Cancelled' ? 'destructive' :
+                    'secondary'
+                }>
+                    {record.status}
+                </Badge>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
     return (
         <Card>
@@ -236,13 +346,14 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
 
                     <Tabs defaultValue="my-leave-records" className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="my-leave-records" asChild>
-                                <Link href="/my-leave-records">My Leave Records</Link>
-                            </TabsTrigger>
+                            <TabsTrigger value="my-leave-records">My Leave Records</TabsTrigger>
                             <TabsTrigger value="my-wancoc-records" asChild>
                                 <Link href="/my-wancoc-records">My WAN/COC Records</Link>
                             </TabsTrigger>
                         </TabsList>
+                        <TabsContent value="my-leave-records" className="pt-4">
+                            <LeaveRecordsTable employee={employee} />
+                        </TabsContent>
                     </Tabs>
                 </div>
                  <Button asChild variant="link" className="mt-6 w-full">
@@ -259,20 +370,32 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
 
 export default function ProfilePage() {
   const [loggedInEmployee, setLoggedInEmployee] = useState<Employee | null>(null);
+  const [isClient, setIsClient] = useState(false);
 
   const handleLogout = () => {
-      // Clear sessionStorage on logout
       sessionStorage.removeItem('loggedInEmployee');
       setLoggedInEmployee(null);
   }
 
-  // On initial render, check if employee data is in sessionStorage
   useEffect(() => {
+    setIsClient(true);
     const employeeData = sessionStorage.getItem('loggedInEmployee');
     if (employeeData) {
       setLoggedInEmployee(JSON.parse(employeeData));
     }
   }, []);
+
+  if (!isClient) {
+    return (
+        <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
+            <main className="w-full max-w-2xl">
+                 <div className="flex items-center justify-center h-40">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </main>
+        </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
@@ -286,3 +409,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    
