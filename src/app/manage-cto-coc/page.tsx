@@ -50,6 +50,13 @@ interface LeaveRequest extends DocumentData {
   inclusiveDates: { from: string; to?: string } | string[];
 }
 
+interface WanRequest extends DocumentData {
+    id: string; // This is the wanCode
+    name: string;
+    dateOfWan: string;
+    totalHours: number;
+}
+
 const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
   if (Array.isArray(dates)) {
     return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
@@ -241,13 +248,89 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
   );
 }
 
+function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredRequests = useMemo(() => {
+    if (!wanRequests) return [];
+    if (!searchTerm) return wanRequests;
+
+    return wanRequests.filter(request =>
+      request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      request.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [wanRequests, searchTerm]);
+
+  return (
+    <>
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        <Input
+          placeholder="Search by name or WAN code..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      ) : filteredRequests.length === 0 ? (
+        <p className="text-center text-muted-foreground py-4">
+          {wanRequests && wanRequests.length > 0 ? 'No matching requests found.' : 'No filed WAN requests found.'}
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>WAN Code</TableHead>
+              <TableHead>Employee Name</TableHead>
+              <TableHead>Date of WAN</TableHead>
+              <TableHead>Total Hours</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredRequests.map((request) => (
+              <TableRow key={request.id}>
+                <TableCell className="font-mono">{request.id}</TableCell>
+                <TableCell>{request.name}</TableCell>
+                <TableCell>{format(new Date(request.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>{request.totalHours.toFixed(2)}</TableCell>
+                <TableCell className="text-right">
+                  <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                    <Link href={`/wan-coc/print/${request.id}`} target="_blank" rel="noopener noreferrer">
+                      <Eye className="h-5 w-5" />
+                    </Link>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </>
+  );
+}
+
+
 export default function ManageCtoCocPage() {
     const firestore = useFirestore();
     const pendingLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'to-process-leave'),
         [firestore]
       );
-    const { data: pendingRequests, isLoading } = useCollection<LeaveRequest>(pendingLeaveQuery);
+    const { data: pendingRequests, isLoading: isLoadingPending } = useCollection<LeaveRequest>(pendingLeaveQuery);
+
+    const filedWanQuery = useMemoFirebase(
+        () => collection(firestore, 'filed-wan'),
+        [firestore]
+    );
+    const { data: filedWanRequests, isLoading: isLoadingWan } = useCollection<WanRequest>(filedWanQuery);
+
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center p-4 antialiased">
@@ -266,14 +349,19 @@ export default function ManageCtoCocPage() {
                         <Badge className="h-5 w-5 flex items-center justify-center p-1">{pendingRequests.length}</Badge>
                     )}
                     </TabsTrigger>
-                <TabsTrigger value="filed-wan">Filed WAN</TabsTrigger>
+                <TabsTrigger value="filed-wan" className="flex items-center gap-2">
+                    Filed WAN
+                    {filedWanRequests && filedWanRequests.length > 0 && (
+                        <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{filedWanRequests.length}</Badge>
+                    )}
+                </TabsTrigger>
                 <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
               </TabsList>
               <TabsContent value="pending-leave" className="pt-4">
-                <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoading} />
+                <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
               </TabsContent>
-              <TabsContent value="filed-wan">
-                <p className="text-center text-muted-foreground py-4">Content for Filed WAN will be added later.</p>
+              <TabsContent value="filed-wan" className="pt-4">
+                <FiledWanTable wanRequests={filedWanRequests} isLoading={isLoadingWan} />
               </TabsContent>
               <TabsContent value="cto-coc-records">
                 <p className="text-center text-muted-foreground py-4">Content for CTO/COC Records will be added later.</p>
@@ -291,3 +379,5 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
+
+    
