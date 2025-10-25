@@ -1,6 +1,6 @@
 
 import Link from 'next/link';
-import { FileText, Globe, ArrowRight, BookUser, Settings } from 'lucide-react';
+import { FileText, Globe, ArrowRight, BookUser, Settings, User } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -27,6 +27,24 @@ export default function Home() {
           </p>
         </div>
         <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+          <Link href="/profile" className="group">
+            <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <User className="h-7 w-7 text-primary" />
+                  My Profile
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Access your profile, view leave records, and manage your account details securely.
+                </CardDescription>
+                <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
+                  Go to profile <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </Link>
           <Link href="/leave-cto" className="group">
             <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
               <CardHeader>
