@@ -219,7 +219,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                     </ScrollArea>
                 </div>
                 <DialogFooter>
-                    <AlertDialogCancel onClick={() => onOpenChange(false)}>Cancel</AlertDialogCancel>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button onClick={handleApprove} disabled={selectedHours < requiredHours || isLoading}>
                         Confirm Approve
                     </Button>
