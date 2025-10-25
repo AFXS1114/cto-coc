@@ -1,129 +1,190 @@
 /**
- * @fileoverview Firestore Security Rules for the application.
- *
- * Core Philosophy:
- * This ruleset prioritizes ease of use by allowing all read and write operations.
+ * @fileOverview
+ * This ruleset enforces a strict user-ownership model for leave requests and WAN/COC requests,
+ * ensuring that users can only access their own data. It also controls access to employee and app user data.
  *
  * Data Structure:
- * Data is organized into collections for users, leave requests, WAN/COC requests, employees, and app users.
+ * - /users/{userId}: Stores user profiles.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
+ * - /to-process-leave/{leaveRequestId}: Stores leave requests pending review.
+ * - /processed-cto/{leaveRequestId}: Stores approved leave requests.
+ * - /cancelled-cto/{leaveRequestId}: Stores cancelled leave requests.
+ * - /employees/{employeeId}: Stores employee information.
+ * - /app-users/{appUserId}: Stores application user credentials.
+ * - /filed-wan/{wanId}: Stores submitted Work Assignment Notice (WAN) requests.
  *
  * Key Security Decisions:
- * This ruleset does not impose any authorization restrictions, effectively making all data public and modifiable by anyone.
+ * - User-owned data (leave_requests, wancoc_requests) is strictly controlled via path-based ownership.
+ * - Listing of user-owned data is allowed only for the owner.
+ * - Access to employee and app user data is restricted.  (TODO: Define the actual access control based on roles).
+ * - No schema validation is performed in this prototyping phase, except for ownership checks.
+ *
+ * Denormalization for Authorization:
+ *  - The 'userId' is embedded within the document path for leave requests and WAN/COC requests,
+ *    enabling direct authorization checks without additional reads.
+ *
+ * Structural Segregation:
+ *  - Leave requests are segregated into 'to-process-leave', 'processed-cto', and 'cancelled-cto' collections
+ *    based on their status, enabling efficient queries and tailored security rules.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Allows all read and write operations on user documents.
+     * @description Controls access to user profiles.
      * @path /users/{userId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (create) User with ID 'user123' can create their own profile.
+     * @deny (create) User with ID 'user123' cannot create a profile with a different ID ('user456').
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows all read and write operations on leave requests within a user's subcollection.
+     * @description Controls access to leave requests for a specific user.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (create) User with ID 'user123' can create a leave request under their profile.
+     * @deny (read) User with ID 'user456' cannot read leave requests under 'user123'.
+     * @principle Restricts access to a user's own leave requests.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows all read and write operations on WAN/COC requests within a user's subcollection.
+     * @description Controls access to WAN/COC requests for a specific user.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (create) User with ID 'user123' can create a WAN/COC request under their profile.
+     * @deny (read) User with ID 'user456' cannot read WAN/COC requests under 'user123'.
+     * @principle Restricts access to a user's own WAN/COC requests.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+      function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+      }
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Allows all read and write operations on leave requests to be processed.
+     * @description Controls access to leave requests that are pending review.
      * @path /to-process-leave/{leaveRequestId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (read) Anyone can read the leave requests pending review.
+     * @deny (create) No one can create documents in this collection directly.
+     * @principle Restricts write access and open access to read for leave requests pending review.
      */
     match /to-process-leave/{leaveRequestId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
-    /**
-     * @description Allows all read and write operations on processed CTO leave requests.
+     /**
+     * @description Controls access to leave requests that have been processed (approved).
      * @path /processed-cto/{leaveRequestId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (read) Anyone can read the leave requests that have been processed.
+     * @deny (create) No one can create documents in this collection directly.
+     * @principle Restricts write access and open access to read for leave requests that have been processed.
      */
-    match /processed-cto/{leaveRequestId} {
+     match /processed-cto/{leaveRequestId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
-    /**
-     * @description Allows all read and write operations on cancelled CTO leave requests.
+     /**
+     * @description Controls access to leave requests that have been cancelled.
      * @path /cancelled-cto/{leaveRequestId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (read) Anyone can read the leave requests that have been cancelled.
+     * @deny (create) No one can create documents in this collection directly.
+     * @principle Restricts write access and open access to read for leave requests that have been cancelled.
      */
-    match /cancelled-cto/{leaveRequestId} {
+     match /cancelled-cto/{leaveRequestId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Allows all read and write operations on employee documents.
+     * @description Controls access to employee information.
      * @path /employees/{employeeId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (read) Anyone can read employee profiles.
+     * @deny (create) No one can create employee profiles.
+     * @principle Restricts write access to employee information.
      */
     match /employees/{employeeId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
 
     /**
-     * @description Allows all read and write operations on app user documents.
+     * @description Controls access to application user credentials.
      * @path /app-users/{appUserId}
-     * @allow (get, list, create, update, delete)
-     * @principle Disables all authorization checks for prototyping.
+     * @allow (read) Anyone can read the app users.
+     * @deny (create) No one can create new app users.
+     * @principle Restricts write access to application user credentials.
      */
     match /app-users/{appUserId} {
       allow get: if true;
       allow list: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Controls access to submitted Work Assignment Notice (WAN) requests.
+     * @path /filed-wan/{wanId}
+     * @allow (read) Anyone can read WAN requests.
+     * @deny (create) No one can create new WAN requests.
+     * @principle Restricts write access to WAN requests.
+     */
+    match /filed-wan/{wanId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
     }
   }
 }
