@@ -11,6 +11,7 @@ import {
   ChevronsUpDown,
   Plus,
   Trash2,
+  Clock,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
@@ -40,7 +41,7 @@ import {
 } from '@/components/ui/command';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
@@ -185,6 +186,7 @@ function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: E
 function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => void }) {
   const { toast } = useToast();
   const [wanCode, setWanCode] = useState('');
+  const [totalHours, setTotalHours] = useState(0);
   const firestore = useFirestore();
   const router = useRouter();
 
@@ -213,6 +215,56 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       control: form.control,
       name: "tasks",
   });
+
+  const inclusiveTimes = useWatch({
+    control: form.control,
+    name: 'inclusiveTimes',
+  });
+
+  useEffect(() => {
+    function calculateTotalHours() {
+      let totalMinutes = 0;
+      const today = new Date();
+      today.setSeconds(0);
+      today.setMilliseconds(0);
+
+      const lunchStart = new Date(today);
+      lunchStart.setHours(12, 0, 0, 0);
+
+      const lunchEnd = new Date(today);
+      lunchEnd.setHours(13, 0, 0, 0);
+
+      inclusiveTimes.forEach(timeRange => {
+        if (timeRange.from && timeRange.to) {
+          let startTime = parse(timeRange.from, 'HH:mm', new Date());
+          let endTime = parse(timeRange.to, 'HH:mm', new Date());
+
+          if (endTime < startTime) { // Handles overnight case
+            endTime.setDate(endTime.getDate() + 1);
+          }
+
+          let duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+
+          // Check for lunch break exclusion
+          const rangeStart = startTime.getTime();
+          const rangeEnd = endTime.getTime();
+          const lunchStartTime = lunchStart.getTime();
+          const lunchEndTime = lunchEnd.getTime();
+          
+          // Check if the range fully contains the lunch break
+          if (rangeStart < lunchStartTime && rangeEnd > lunchEndTime) {
+            duration -= 60; // Subtract 1 hour in minutes
+          }
+          
+          totalMinutes += duration;
+        }
+      });
+
+      setTotalHours(Math.max(0, totalMinutes / 60));
+    }
+
+    calculateTotalHours();
+  }, [inclusiveTimes]);
 
   useEffect(() => {
     if (wanCode) {
@@ -346,58 +398,64 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                 )}
               />
             </div>
-             <div className='space-y-2'>
+            <div className='space-y-2'>
+              <div className="flex justify-between items-center">
                 <FormLabel>Inclusive Time</FormLabel>
-                <div className="space-y-4 pt-2">
-                 {timeFields.map((item, index) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                        <FormField
-                        control={form.control}
-                        name={`inclusiveTimes.${index}.from`}
-                        render={({ field }) => (
-                            <FormItem className="flex-1">
-                            <FormControl>
-                                <Input type="time" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                        <span>-</span>
-                        <FormField
-                        control={form.control}
-                        name={`inclusiveTimes.${index}.to`}
-                        render={({ field }) => (
-                            <FormItem className="flex-1">
-                            <FormControl>
-                                <Input type="time" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                         <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeTime(index)}
-                            disabled={timeFields.length <= 1}
-                            className="text-destructive hover:text-destructive"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                ))}
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>Total Hours: {totalHours.toFixed(2)}</span>
                 </div>
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => appendTime({ from: '', to: '' })}
-                    >
-                    <Plus className="mr-2 h-4 w-4" /> Add Time
-                </Button>
+              </div>
+              <div className="space-y-4 pt-2">
+               {timeFields.map((item, index) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                      <FormField
+                      control={form.control}
+                      name={`inclusiveTimes.${index}.from`}
+                      render={({ field }) => (
+                          <FormItem className="flex-1">
+                          <FormControl>
+                              <Input type="time" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
+                      <span>-</span>
+                      <FormField
+                      control={form.control}
+                      name={`inclusiveTimes.${index}.to`}
+                      render={({ field }) => (
+                          <FormItem className="flex-1">
+                          <FormControl>
+                              <Input type="time" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
+                       <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeTime(index)}
+                          disabled={timeFields.length <= 1}
+                          className="text-destructive hover:text-destructive"
+                      >
+                          <Trash2 className="h-4 w-4" />
+                      </Button>
+                  </div>
+              ))}
+              </div>
+              <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => appendTime({ from: '', to: '' })}
+                  >
+                  <Plus className="mr-2 h-4 w-4" /> Add Time
+              </Button>
             </div>
              <div className="space-y-2">
                 <FormLabel>Nature of Work Assignment/Overtime:</FormLabel>
@@ -474,5 +532,3 @@ export default function WanCocPage() {
     </div>
   );
 }
-
-    
