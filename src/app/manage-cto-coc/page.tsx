@@ -39,6 +39,7 @@ import { collection, doc, setDoc, deleteDoc, DocumentData } from 'firebase/fires
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface LeaveRequest extends DocumentData {
   id: string; // This is the leaveCode
@@ -61,7 +62,7 @@ const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
   return 'N/A';
 };
 
-function ManageCtoCocTable() {
+function PendingLeaveTable() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [remarks, setRemarks] = useState('');
@@ -255,7 +256,22 @@ export default function ManageCtoCocPage() {
             <CardDescription>Review, approve, or cancel pending leave requests.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ManageCtoCocTable />
+            <Tabs defaultValue="pending-leave">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="pending-leave">Pending Leave</TabsTrigger>
+                <TabsTrigger value="filed-wan">Filed WAN</TabsTrigger>
+                <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
+              </TabsList>
+              <TabsContent value="pending-leave" className="pt-4">
+                <PendingLeaveTable />
+              </TabsContent>
+              <TabsContent value="filed-wan">
+                <p className="text-center text-muted-foreground py-4">Content for Filed WAN will be added later.</p>
+              </TabsContent>
+              <TabsContent value="cto-coc-records">
+                <p className="text-center text-muted-foreground py-4">Content for CTO/COC Records will be added later.</p>
+              </TabsContent>
+            </Tabs>
             <Button asChild variant="link" className="mt-6 w-full">
               <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
