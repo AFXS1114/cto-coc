@@ -228,11 +228,23 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
   }, [employee, form]);
 
   function onSubmit(data: WanCocFormValues) {
-    console.log(data);
-    // TODO: Firestore submission logic
+    const submissionData = {
+        id: data.wanCode,
+        ...data,
+        dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
+    };
+
+    const docRef = doc(firestore, 'filed-wan', submissionData.id);
+    setDoc(docRef, submissionData).catch(error => console.error("Error writing document:", error));
+
     toast({
       title: 'WAN Filed Successfully!',
       description: `Your WAN request (${data.wanCode}) has been submitted.`,
+      action: (
+        <Button onClick={() => router.push(`/wan-coc/print/${data.wanCode}`)}>
+          Print Form
+        </Button>
+      )
     });
     
     onBack();
