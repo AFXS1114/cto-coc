@@ -388,7 +388,7 @@ export default function ProfilePage() {
   if (!isClient) {
     return (
         <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
-            <main className="w-full max-w-2xl">
+            <main className="w-full max-w-4xl">
                  <div className="flex items-center justify-center h-40">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
@@ -399,7 +399,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
-      <main className="w-full max-w-2xl">
+      <main className="w-full max-w-4xl">
         {loggedInEmployee ? (
           <ProfileView employee={loggedInEmployee} onLogout={handleLogout} />
         ) : (
