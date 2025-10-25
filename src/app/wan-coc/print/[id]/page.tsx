@@ -17,6 +17,7 @@ interface WanData extends DocumentData {
   unitDivision: string;
   inclusiveTimes: { from: string; to: string }[];
   tasks: { value: string }[];
+  totalHours: number;
 }
 
 const formatTime = (time: string) => {
@@ -121,7 +122,6 @@ export default function PrintWanPage() {
                         {wanData.tasks.map((task, index) => (
                             <p key={index}>{task.value}</p>
                         ))}
-                         <p className="text-center pt-2">-</p>
                     </div>
                 </div>
 

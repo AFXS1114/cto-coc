@@ -86,7 +86,8 @@ const wanCocFormSchema = z.object({
   })).min(1, 'At least one time range is required.'),
   tasks: z.array(z.object({
       value: z.string().min(1, "Please select a task.")
-  })).min(1, "At least one task is required.")
+  })).min(1, "At least one task is required."),
+  totalHours: z.number(),
 });
 
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
@@ -202,7 +203,8 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       dateOfWan: new Date(),
       unitDivision: 'BULAN FISH PORT COMPLEX',
       inclusiveTimes: [{ from: '', to: '' }],
-      tasks: [{ value: taskOptions[0]}]
+      tasks: [{ value: taskOptions[0]}],
+      totalHours: 0,
     },
   });
 
@@ -259,12 +261,13 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
           totalMinutes += duration;
         }
       });
-
-      setTotalHours(Math.max(0, totalMinutes / 60));
+      const newTotalHours = Math.max(0, totalMinutes / 60);
+      setTotalHours(newTotalHours);
+      form.setValue('totalHours', newTotalHours);
     }
 
     calculateTotalHours();
-  }, [inclusiveTimes]);
+  }, [inclusiveTimes, form]);
 
   useEffect(() => {
     if (wanCode) {

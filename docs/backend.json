@@ -142,9 +142,13 @@
             }
           },
           "description": "List of tasks or activities for the assignment."
+        },
+        "totalHours": {
+          "type": "number",
+          "description": "Total computed hours for the work assignment."
         }
       },
-      "required": ["id", "name", "dateOfWan", "unitDivision", "inclusiveTimes", "tasks"]
+      "required": ["id", "name", "dateOfWan", "unitDivision", "inclusiveTimes", "tasks", "totalHours"]
     },
     "User": {
       "$schema": "http://json-schema.org/draft-07/schema#",
