@@ -47,12 +47,33 @@ import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Employee {
     id: string;
     name: string;
     position: string;
 }
+
+const taskOptions = [
+    'Monitor/tally the volume of fish unloading by fishing vessels and overland vehicles;',
+    'Record the arrival and departure of fishing/non-fishing vessels;',
+    'Issue berthing, wharfage, fish unloading and other transactions stubs;',
+    'Prepare reports for statistical purposes;',
+    'Secure berthing space for alighting boats per unloading of fishes;',
+    'Serve monthly billing to Port Clients;',
+    'Act as toll gate keeper;',
+    'Prepare and issue PTCB certificates, Food Pass and isDA on the Go Passes (Permit to travel for Fish Brokers/Viajeros/Drivers/Labor bound to NCR and nearby provinces);',
+    'Maintenance and troubleshooting of desktops, personal computers, laptop, printers and other IT equipment of BFPC;',
+    'Preparation of ID for Port Clients;',
+    'Convey the Officer-in-Charge, BFPC personnel, PFDA Officials and Staff, and BFPC Guest on official business in BFPC vicinity and nearby municipalities;',
+    'Handle and assess initial application and registration forms for port facilities and issuance of ID for port clients;',
+    'Conduct contact tracing to Port Clients;',
+    'Monitor and maintain BFPC Electrical Systems;',
+    'Assists in any tasks ordered by the Port Manager and other related concerns;',
+    'Prepare monthly billing for Monthly rentals;',
+    'Prepare daily Unloading and Berthing slip;',
+];
 
 const wanCocFormSchema = z.object({
   wanCode: z.string(),
@@ -63,6 +84,9 @@ const wanCocFormSchema = z.object({
     from: z.string().min(1, 'Start time is required.'),
     to: z.string().min(1, 'End time is required.'),
   })).min(1, 'At least one time range is required.'),
+  tasks: z.array(z.object({
+      value: z.string().min(1, "Please select a task.")
+  })).min(1, "At least one task is required.")
 });
 
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
@@ -177,12 +201,18 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       dateOfWan: new Date(),
       unitDivision: 'BULAN FISH PORT COMPLEX',
       inclusiveTimes: [{ from: '', to: '' }],
+      tasks: [{ value: taskOptions[0]}]
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields: timeFields, append: appendTime, remove: removeTime } = useFieldArray({
     control: form.control,
     name: 'inclusiveTimes',
+  });
+
+  const { fields: taskFields, append: appendTask, remove: removeTask } = useFieldArray({
+      control: form.control,
+      name: "tasks",
   });
 
   useEffect(() => {
@@ -297,10 +327,10 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                 )}
               />
             </div>
-             <div>
+             <div className='space-y-2'>
                 <FormLabel>Inclusive Time</FormLabel>
                 <div className="space-y-4 pt-2">
-                 {fields.map((item, index) => (
+                 {timeFields.map((item, index) => (
                     <div key={item.id} className="flex items-center gap-2">
                         <FormField
                         control={form.control}
@@ -331,8 +361,8 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => remove(index)}
-                            disabled={fields.length <= 1}
+                            onClick={() => removeTime(index)}
+                            disabled={timeFields.length <= 1}
                             className="text-destructive hover:text-destructive"
                         >
                             <Trash2 className="h-4 w-4" />
@@ -345,9 +375,58 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                     variant="outline"
                     size="sm"
                     className="mt-2"
-                    onClick={() => append({ from: '', to: '' })}
+                    onClick={() => appendTime({ from: '', to: '' })}
                     >
                     <Plus className="mr-2 h-4 w-4" /> Add Time
+                </Button>
+            </div>
+             <div className="space-y-2">
+                <FormLabel>Accomplishments/Activities</FormLabel>
+                 <div className="space-y-4 pt-2">
+                     {taskFields.map((item, index) => (
+                         <div key={item.id} className="flex items-center gap-2">
+                             <FormField
+                                control={form.control}
+                                name={`tasks.${index}.value`}
+                                render={({ field }) => (
+                                    <FormItem className="flex-1">
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a task/activity" />
+                                        </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                        {taskOptions.map(option => (
+                                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                                        ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                    </FormItem>
+                                )}
+                                />
+                                <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeTask(index)}
+                                disabled={taskFields.length <= 1}
+                                className="text-destructive hover:text-destructive"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                            </Button>
+                         </div>
+                     ))}
+                 </div>
+                 <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => appendTask({ value: '' })}
+                    >
+                    <Plus className="mr-2 h-4 w-4" /> Add Activity
                 </Button>
             </div>
              <div className="flex gap-4">
@@ -376,5 +455,3 @@ export default function WanCocPage() {
     </div>
   );
 }
-
-    
