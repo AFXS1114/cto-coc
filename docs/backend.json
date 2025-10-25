@@ -45,6 +45,13 @@
         "userId": {
           "type": "string",
           "description": "Reference to User. (Relationship: User 1:N LeaveRequest)"
+        },
+        "attachedWanCodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "An array of WAN codes attached to this leave request upon approval."
         }
       },
       "required": [
@@ -146,6 +153,11 @@
         "totalHours": {
           "type": "number",
           "description": "Total computed hours for the work assignment."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "used"],
+          "description": "The status of the WAN request, indicating if it has been used for a leave."
         }
       },
       "required": ["id", "name", "dateOfWan", "unitDivision", "inclusiveTimes", "tasks", "totalHours"]
@@ -396,3 +408,5 @@
     "reasoning": "The Firestore data structure is designed to store leave and WAN/COC requests, associating them with users.  The structure prioritizes path-based ownership for simplicity and security. Specifically, all `LeaveRequest` and `WANCOCRequest` documents are stored under a user-specific subcollection, enabling simple security rules based on `request.auth.uid`. This eliminates the need for complex `get()` calls in security rules, enabling Authorization Independence and supporting atomic operations.\n\nTo further enhance clarity and QAPs (Rules are not Filters), the `leave_requests` and `wancoc_requests` are stored in dedicated collections. This segregation ensures a homogeneous security posture, as all documents within each collection share the same access requirements.\n\nThe paths enforce clear ownership and enable efficient queries for a user's requests."
   }
 }
+
+    

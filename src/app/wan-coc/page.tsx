@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Link from 'next/link';
@@ -88,6 +89,7 @@ const wanCocFormSchema = z.object({
       value: z.string().min(1, "Please select a task.")
   })).min(1, "At least one task is required."),
   totalHours: z.number(),
+  status: z.string().default('available'),
 });
 
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
@@ -205,6 +207,7 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       inclusiveTimes: [{ from: '', to: '' }],
       tasks: [{ value: taskOptions[0]}],
       totalHours: 0,
+      status: 'available',
     },
   });
 
@@ -535,3 +538,5 @@ export default function WanCocPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -19,6 +20,8 @@ interface LeaveData extends DocumentData {
   leaveType: string;
   inclusiveDates: { from: string, to?: string } | string[];
   leaveCode: string;
+  attachedWanCodes?: string[];
+  totalHours?: number;
 }
 
 export default function PrintLeavePage() {
@@ -28,10 +31,28 @@ export default function PrintLeavePage() {
   
   const leaveDocRef = useMemoFirebase(() => {
     if (!firestore || !leaveId) return null;
-    return doc(firestore, 'to-process-leave', leaveId);
+    // Check both pending and processed collections
+    // This is a simplified approach. In a real app, you might know the status
+    // or have a more robust way of locating the document.
+    // For now, we'll assume it's in processed-cto if it has attached codes.
+    // A better approach would be to check one, and if not found, check the other.
+    // Let's try `processed-cto` first, then `to-process-leave`. This is not ideal.
+    return doc(firestore, 'processed-cto', leaveId);
   }, [firestore, leaveId]);
 
-  const { data: leaveData, isLoading } = useDoc<LeaveData>(leaveDocRef);
+  const { data: processedLeaveData, isLoading: isLoadingProcessed } = useDoc<LeaveData>(leaveDocRef);
+
+  const pendingLeaveDocRef = useMemoFirebase(() => {
+    // Only query pending if the processed one is not found and not loading
+    if (!firestore || !leaveId || processedLeaveData || isLoadingProcessed) return null;
+    return doc(firestore, 'to-process-leave', leaveId);
+  }, [firestore, leaveId, processedLeaveData, isLoadingProcessed]);
+
+  const { data: pendingLeaveData, isLoading: isLoadingPending } = useDoc<LeaveData>(pendingLeaveDocRef);
+
+  const leaveData = processedLeaveData || pendingLeaveData;
+  const isLoading = isLoadingProcessed || isLoadingPending;
+
 
   const handlePrint = () => {
     window.print();
@@ -69,8 +90,10 @@ export default function PrintLeavePage() {
   }
 
   if (!leaveData) {
-    return <div className="text-center py-10">Leave application not found.</div>;
+    return <div className="text-center py-10">Leave application not found in processed or pending records.</div>;
   }
+
+  const requiredHours = leaveData.daysApplied * 8;
 
   return (
     <div className="bg-gray-100 font-sans text-sm">
@@ -185,30 +208,32 @@ export default function PrintLeavePage() {
                 <div className="grid grid-cols-2">
                     <div className="border-r-2 border-black p-2">
                         <p className="text-xs">7(a) CERTIFICATION OF LEAVE CREDITS</p>
-                        <p className="text-xs mt-2">As of _________________</p>
+                        <p className="text-xs mt-2">As of {format(new Date(), 'MMMM dd, yyyy')}</p>
                         <table className="w-full border-collapse border border-black mt-2 text-xs">
                             <thead>
                                 <tr>
-                                    <th className="border border-black w-1/3">&nbsp;</th>
-                                    <th className="border border-black w-1/3">Vacation</th>
-                                    <th className="border border-black w-1/3">Sick</th>
+                                    <th className="border border-black w-1/2">Attached WAN Code(s)</th>
+                                    <th className="border border-black w-1/2">Total Hours</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td className="border border-black p-1">Total Earned</td>
-                                    <td className="border border-black">&nbsp;</td>
-                                    <td className="border border-black">&nbsp;</td>
+                                    <td className="border border-black p-1 text-center">
+                                        {leaveData.attachedWanCodes && leaveData.attachedWanCodes.length > 0 ? leaveData.attachedWanCodes.join(', ') : 'N/A'}
+                                    </td>
+                                    <td className="border border-black p-1 text-center">
+                                        {leaveData.totalHours !== undefined ? leaveData.totalHours.toFixed(2) : 'N/A'}
+                                    </td>
                                 </tr>
                                 <tr>
                                     <td className="border border-black p-1">Less this application</td>
-                                    <td className="border border-black">&nbsp;</td>
-                                    <td className="border border-black">&nbsp;</td>
+                                    <td className="border border-black p-1 text-center">{requiredHours.toFixed(2)}</td>
                                 </tr>
                                  <tr>
-                                    <td className="border border-black p-1">Balance</td>
-                                    <td className="border border-black">&nbsp;</td>
-                                    <td className="border border-black">&nbsp;</td>
+                                    <td className="border border-black p-1 font-bold">Balance</td>
+                                    <td className="border border-black p-1 text-center font-bold">
+                                        {leaveData.totalHours !== undefined ? (leaveData.totalHours - requiredHours).toFixed(2) : 'N/A'}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -269,3 +294,5 @@ export default function PrintLeavePage() {
     </div>
   );
 }
+
+    

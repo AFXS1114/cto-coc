@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,17 +31,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Info } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc, deleteDoc, DocumentData } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 interface LeaveRequest extends DocumentData {
   id: string; // This is the leaveCode
@@ -55,6 +66,7 @@ interface WanRequest extends DocumentData {
     name: string;
     dateOfWan: string;
     totalHours: number;
+    status?: 'available' | 'used';
 }
 
 const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
@@ -70,11 +82,159 @@ const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
   return 'N/A';
 };
 
+function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveRequest, onOpenChange: (open: boolean) => void, open: boolean }) {
+    const firestore = useFirestore();
+    const { toast } = useToast();
+    const [selectedWans, setSelectedWans] = useState<WanRequest[]>([]);
+    
+    const availableWansQuery = useMemoFirebase(() => {
+        if (!firestore || !request) return null;
+        return query(
+            collection(firestore, 'filed-wan'),
+            where('name', '==', request.name),
+            where('status', '==', 'available')
+        );
+    }, [firestore, request]);
+    
+    const { data: availableWans, isLoading } = useCollection<WanRequest>(availableWansQuery);
+
+    const requiredHours = request.daysApplied * 8;
+    const selectedHours = useMemo(() => {
+        return selectedWans.reduce((total, wan) => total + (wan.totalHours || 0), 0);
+    }, [selectedWans]);
+
+    const handleSelectWan = (wan: WanRequest) => {
+        setSelectedWans(prev => 
+            prev.some(w => w.id === wan.id) 
+            ? prev.filter(w => w.id !== wan.id)
+            : [...prev, wan]
+        );
+    }
+    
+    const handleApprove = async () => {
+        if (!firestore) return;
+        if (selectedHours < requiredHours) {
+            toast({
+                variant: 'destructive',
+                title: 'Insufficient Hours',
+                description: `You need to select at least ${requiredHours} hours worth of WANs.`
+            });
+            return;
+        }
+
+        try {
+            const batch = writeBatch(firestore);
+
+            // 1. Add to processed-cto
+            const newDocRef = doc(firestore, 'processed-cto', request.id);
+            batch.set(newDocRef, { 
+                ...request, 
+                status: 'Approved',
+                attachedWanCodes: selectedWans.map(w => w.id),
+                totalHours: selectedHours
+            });
+            
+            // 2. Mark WANs as used
+            selectedWans.forEach(wan => {
+                const wanRef = doc(firestore, 'filed-wan', wan.id);
+                batch.update(wanRef, { status: 'used' });
+            });
+
+            // 3. Delete from to-process-leave
+            const oldDocRef = doc(firestore, 'to-process-leave', request.id);
+            batch.delete(oldDocRef);
+
+            await batch.commit();
+
+            toast({
+                title: `Request Approved`,
+                description: `The leave request for ${request.name} has been approved.`
+            });
+            onOpenChange(false);
+            setSelectedWans([]);
+
+        } catch (error) {
+            console.error('Error approving leave request:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to approve leave request.'
+            });
+        }
+    }
+
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Attach WAN to Approve Leave</DialogTitle>
+                    <DialogDescription>
+                        Select available WANs for {request.name} to fulfill the required hours for this leave.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="flex justify-between items-center bg-muted p-3 rounded-lg">
+                        <div>
+                            <p className="font-semibold">Leave Days: {request.daysApplied}</p>
+                            <p className="text-sm text-muted-foreground">Required Hours: {requiredHours.toFixed(2)}</p>
+                        </div>
+                        <div className={selectedHours >= requiredHours ? 'text-green-600' : 'text-destructive'}>
+                            <p className="font-semibold text-right">Selected Hours</p>
+                            <p className="text-2xl font-bold text-right">{selectedHours.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    
+                    <p className="font-medium">Available WANs for {request.name}</p>
+                    <ScrollArea className="h-64 border rounded-md">
+                        {isLoading ? <Skeleton className="h-full w-full" /> : 
+                         !availableWans || availableWans.length === 0 ? <p className="p-4 text-center text-muted-foreground">No available WANs found.</p> :
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[50px]"></TableHead>
+                                    <TableHead>WAN Code</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead className="text-right">Hours</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {availableWans.map(wan => (
+                                    <TableRow key={wan.id}>
+                                        <TableCell>
+                                            <Checkbox 
+                                                checked={selectedWans.some(w => w.id === wan.id)}
+                                                onCheckedChange={() => handleSelectWan(wan)}
+                                                id={`wan-${wan.id}`}
+                                            />
+                                        </TableCell>
+                                        <TableCell><label htmlFor={`wan-${wan.id}`} className="font-mono">{wan.id}</label></TableCell>
+                                        <TableCell><label htmlFor={`wan-${wan.id}`}>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</label></TableCell>
+                                        <TableCell className="text-right"><label htmlFor={`wan-${wan.id}`}>{(wan.totalHours || 0).toFixed(2)}</label></TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                        }
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <AlertDialogCancel onClick={() => onOpenChange(false)}>Cancel</AlertDialogCancel>
+                    <Button onClick={handleApprove} disabled={selectedHours < requiredHours || isLoading}>
+                        Confirm Approve
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: LeaveRequest[] | null, isLoading: boolean}) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [remarks, setRemarks] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!pendingRequests) return [];
@@ -85,32 +245,6 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
       request.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [pendingRequests, searchTerm]);
-
-  const handleApprove = async (request: LeaveRequest) => {
-     if (!firestore) return;
-    try {
-      // 1. Add the document to the processed-cto collection
-      const newDocRef = doc(firestore, 'processed-cto', request.id);
-      await setDoc(newDocRef, { ...request, status: 'Approved' });
-
-      // 2. Delete the document from the old collection
-      const oldDocRef = doc(firestore, 'to-process-leave', request.id);
-      await deleteDoc(oldDocRef);
-      
-      toast({
-        title: `Request Approved`,
-        description: `The leave request for ${request.name} has been approved.`
-      });
-
-    } catch (error) {
-      console.error('Error approving leave request:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to approve leave request.'
-      });
-    }
-  }
 
   const handleCancel = async (request: LeaveRequest) => {
     if (!firestore) return;
@@ -187,27 +321,11 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                       <Eye className="h-5 w-5" />
                     </Link>
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700">
-                        <CheckCircle className="h-5 w-5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Approve Leave Request?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will approve the leave request for {request.name}. Are you sure?
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleApprove(request)}>
-                          Approve
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  
+                  <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
+                    <CheckCircle className="h-5 w-5" />
+                  </Button>
+                  
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
@@ -243,6 +361,17 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
             ))}
           </TableBody>
         </Table>
+      )}
+       {selectedRequest && (
+        <AttachWansDialog
+          open={!!selectedRequest}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) {
+              setSelectedRequest(null);
+            }
+          }}
+          request={selectedRequest}
+        />
       )}
     </>
   );
@@ -290,6 +419,7 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
               <TableHead>Employee Name</TableHead>
               <TableHead>Date of WAN</TableHead>
               <TableHead>Total Hours</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -300,6 +430,11 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
                 <TableCell>{request.name}</TableCell>
                 <TableCell>{format(new Date(request.dateOfWan), 'MMM dd, yyyy')}</TableCell>
                 <TableCell>{(request.totalHours || 0).toFixed(2)}</TableCell>
+                <TableCell>
+                    <Badge variant={request.status === 'used' ? 'destructive' : 'secondary'}>
+                        {request.status || 'available'}
+                    </Badge>
+                </TableCell>
                 <TableCell className="text-right">
                   <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
                     <Link href={`/wan-coc/print/${request.id}`} target="_blank" rel="noopener noreferrer">
@@ -379,3 +514,5 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
+
+    
