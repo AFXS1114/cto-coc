@@ -299,7 +299,7 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
                 <TableCell className="font-mono">{request.id}</TableCell>
                 <TableCell>{request.name}</TableCell>
                 <TableCell>{format(new Date(request.dateOfWan), 'MMM dd, yyyy')}</TableCell>
-                <TableCell>{request.totalHours.toFixed(2)}</TableCell>
+                <TableCell>{(request.totalHours || 0).toFixed(2)}</TableCell>
                 <TableCell className="text-right">
                   <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
                     <Link href={`/wan-coc/print/${request.id}`} target="_blank" rel="noopener noreferrer">
@@ -379,5 +379,3 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
-
-    
