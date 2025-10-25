@@ -23,7 +23,6 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -43,7 +42,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Info, Printer } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -52,6 +51,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import LeavePrintForm from '@/app/leave-cto/print/[id]/LeavePrintForm';
+
 
 interface LeaveRequest extends DocumentData {
   id: string; // This is the leaveCode
@@ -62,6 +63,7 @@ interface LeaveRequest extends DocumentData {
   status?: 'Pending' | 'Approved' | 'Cancelled';
   attachedWanCodes?: string[];
   remarks?: string;
+  totalHours?: number;
 }
 
 interface WanRequest extends DocumentData {
@@ -238,6 +240,7 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
   const [remarks, setRemarks] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [viewRequest, setViewRequest] = useState<LeaveRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!pendingRequests) return [];
@@ -319,10 +322,8 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                 <TableCell>{request.daysApplied}</TableCell>
                 <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                    <Link href={`/leave-cto/print/${request.id}`} target="_blank" rel="noopener noreferrer">
-                      <Eye className="h-5 w-5" />
-                    </Link>
+                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
+                    <Eye className="h-5 w-5" />
                   </Button>
                   
                   <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
@@ -375,6 +376,29 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
           }}
           request={selectedRequest}
         />
+      )}
+      {viewRequest && (
+        <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Leave Application Preview</DialogTitle>
+                    <DialogDescription>
+                        Viewing leave application for {viewRequest.name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow overflow-y-auto">
+                    <LeavePrintForm leaveId={viewRequest.id} />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
+                    <Button asChild>
+                        <Link href={`/leave-cto/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
+                            <Printer className="mr-2 h-4 w-4" /> Print
+                        </Link>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       )}
     </>
   );
@@ -457,6 +481,7 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
 function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { approvedRequests: LeaveRequest[] | null, cancelledRequests: LeaveRequest[] | null, isLoading: boolean }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('approved');
+    const [viewRequest, setViewRequest] = useState<LeaveRequest | null>(null);
 
     const filteredApproved = useMemo(() => {
         if (!approvedRequests) return [];
@@ -505,10 +530,8 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                                            <Link href={`/leave-cto/print/${request.id}`} target="_blank" rel="noopener noreferrer">
-                                                <Eye className="h-5 w-5" />
-                                            </Link>
+                                        <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
+                                            <Eye className="h-5 w-5" />
                                         </Button>
                                     </TableCell>
                                 </TableRow>
@@ -543,6 +566,29 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                     }
                 </TabsContent>
             </Tabs>
+            {viewRequest && (
+                <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
+                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Leave Application Preview</DialogTitle>
+                            <DialogDescription>
+                                Viewing leave application for {viewRequest.name}.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex-grow overflow-y-auto">
+                            <LeavePrintForm leaveId={viewRequest.id} />
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
+                            <Button asChild>
+                                <Link href={`/leave-cto/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
+                                    <Printer className="mr-2 h-4 w-4" /> Print
+                                </Link>
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 }
