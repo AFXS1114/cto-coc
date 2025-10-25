@@ -117,14 +117,12 @@ export default function PrintWanPage() {
 
                 <div className="mt-4 text-sm">
                     <p>Nature of Work Assignment/Overtime:</p>
-                    <div className="border-t border-black mt-2 pt-2 space-y-1 pl-4">
+                    <div className="border-t border-black mt-2 pt-2 space-y-1 pl-4 min-h-[6rem]">
                         {wanData.tasks.map((task, index) => (
                             <p key={index}>{task.value}</p>
                         ))}
                          <p className="text-center pt-2">-</p>
                     </div>
-                    <div className="border-t border-black mt-2">&nbsp;</div>
-                    <div className="border-t border-black mt-2">&nbsp;</div>
                 </div>
 
                 <div className="mt-8 text-sm">
