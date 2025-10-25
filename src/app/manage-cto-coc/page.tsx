@@ -40,6 +40,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 interface LeaveRequest extends DocumentData {
   id: string; // This is the leaveCode
@@ -62,17 +63,11 @@ const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
   return 'N/A';
 };
 
-function PendingLeaveTable() {
+function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: LeaveRequest[] | null, isLoading: boolean}) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [remarks, setRemarks] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-
-  const pendingLeaveQuery = useMemoFirebase(
-    () => collection(firestore, 'to-process-leave'),
-    [firestore]
-  );
-  const { data: pendingRequests, isLoading } = useCollection<LeaveRequest>(pendingLeaveQuery);
 
   const filteredRequests = useMemo(() => {
     if (!pendingRequests) return [];
@@ -247,6 +242,13 @@ function PendingLeaveTable() {
 }
 
 export default function ManageCtoCocPage() {
+    const firestore = useFirestore();
+    const pendingLeaveQuery = useMemoFirebase(
+        () => collection(firestore, 'to-process-leave'),
+        [firestore]
+      );
+    const { data: pendingRequests, isLoading } = useCollection<LeaveRequest>(pendingLeaveQuery);
+
   return (
     <div className="flex min-h-screen w-full flex-col items-center p-4 antialiased">
       <main className="w-full max-w-6xl mt-8">
@@ -258,12 +260,17 @@ export default function ManageCtoCocPage() {
           <CardContent>
             <Tabs defaultValue="pending-leave">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="pending-leave">Pending Leave</TabsTrigger>
+                <TabsTrigger value="pending-leave" className="flex items-center gap-2">
+                    Pending Leave
+                    {pendingRequests && pendingRequests.length > 0 && (
+                        <Badge className="h-5 w-5 flex items-center justify-center p-1">{pendingRequests.length}</Badge>
+                    )}
+                    </TabsTrigger>
                 <TabsTrigger value="filed-wan">Filed WAN</TabsTrigger>
                 <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
               </TabsList>
               <TabsContent value="pending-leave" className="pt-4">
-                <PendingLeaveTable />
+                <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoading} />
               </TabsContent>
               <TabsContent value="filed-wan">
                 <p className="text-center text-muted-foreground py-4">Content for Filed WAN will be added later.</p>
