@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { FileText, Globe, ArrowRight, BookUser, Settings } from 'lucide-react';
 import {
@@ -19,10 +20,10 @@ export default function Home() {
       <main className="flex flex-col items-center justify-center gap-8">
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl font-headline">
-            Static Router
+            CTO & COC <br /> Management
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-muted-foreground">
-            Choose a form to file. Your gateway to managing administrative tasks efficiently.
+            Leave and Leave Credit Management for Job Orders.
           </p>
         </div>
         <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
