@@ -42,8 +42,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
@@ -235,7 +234,15 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
     };
 
     const docRef = doc(firestore, 'filed-wan', submissionData.id);
-    setDoc(docRef, submissionData).catch(error => console.error("Error writing document:", error));
+    setDoc(docRef, submissionData)
+    .catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
+          path: docRef.path,
+          operation: 'create',
+          requestResourceData: submissionData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      });
 
     toast({
       title: 'WAN Filed Successfully!',
@@ -467,3 +474,5 @@ export default function WanCocPage() {
     </div>
   );
 }
+
+    
