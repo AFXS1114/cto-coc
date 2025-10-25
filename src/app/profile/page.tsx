@@ -31,10 +31,12 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, BookOpen, FileText, User, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 interface Employee {
   id: string;
@@ -202,9 +204,9 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
           </form>
         </Form>
         <Button asChild variant="link" className="mt-6 w-full">
-            <Link href="/leave-cto">
+            <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to File Leave
+                Back to Home
             </Link>
         </Button>
       </CardContent>
@@ -212,53 +214,45 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
   );
 }
 
-function ProfileNavbar({ onLogout }: { onLogout: () => void }) {
-  return (
-     <nav className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-transparent">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/my-leave-records"
-          className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors font-medium"
-        >
-          <FileText className="h-5 w-5" />
-          <span>My Leave Records</span>
-        </Link>
-        <Link
-          href="/my-wancoc-records"
-          className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors font-medium"
-        >
-          <BookOpen className="h-5 w-5" />
-          <span>My WAN/COC Records</span>
-        </Link>
-      </div>
-       <Button variant="outline" onClick={onLogout}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Logout
-        </Button>
-    </nav>
-  );
-}
-
-
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
     return (
-        <div className="relative flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
-            <ProfileNavbar onLogout={onLogout}/>
-            <main className="w-full max-w-2xl mt-16">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="text-3xl font-headline">Welcome, {employee.name}</CardTitle>
-                        <CardDescription>This is your profile page. You can view your records using the links above.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-2">
-                            <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
-                            <p className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-            </main>
-        </div>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="text-3xl font-headline">Welcome, {employee.name}</CardTitle>
+                    <CardDescription>View your records or log out.</CardDescription>
+                </div>
+                <Button variant="outline" size="icon" onClick={onLogout}>
+                    <LogOut className="h-5 w-5" />
+                    <span className="sr-only">Logout</span>
+                </Button>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    <div className="p-4 rounded-lg bg-muted/50 border">
+                        <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
+                        <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
+                    </div>
+
+                    <Tabs defaultValue="my-leave-records" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="my-leave-records" asChild>
+                                <Link href="/my-leave-records">My Leave Records</Link>
+                            </TabsTrigger>
+                            <TabsTrigger value="my-wancoc-records" asChild>
+                                <Link href="/my-wancoc-records">My WAN/COC Records</Link>
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                </div>
+                 <Button asChild variant="link" className="mt-6 w-full">
+                    <Link href="/">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to Home
+                    </Link>
+                </Button>
+            </CardContent>
+        </Card>
     )
 }
 
