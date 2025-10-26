@@ -120,7 +120,9 @@ export default function Home() {
         </div>
       </main>
       <footer className="absolute bottom-4 text-center text-sm text-muted-foreground">
-        Built with Next.js and ShadCN UI.
+        <a href="https://www.youtube.com/@creativexian1114" target="_blank" rel="noopener noreferrer" className="hover:underline">
+          {'{bug}'}
+        </a>
       </footer>
     </div>
   );
