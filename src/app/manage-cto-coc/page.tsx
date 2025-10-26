@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -110,8 +109,8 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
         if (!firestore || !request) return null;
         return query(
             collection(firestore, 'filed-wan'),
-            where('name', '==', request.name)
-            // No status filter here, we'll filter client-side
+            where('name', '==', request.name),
+            where('status', '==', 'available')
         );
     }, [firestore, request]);
     
@@ -763,18 +762,20 @@ export default function ManageCtoCocPage() {
         () => collection(firestore, 'filed-wan'),
         [firestore]
     );
-    const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
     const { data: filedWans, isLoading: isLoadingFiled } = useCollection<WanRequest>(filedWanQuery);
-    const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
+    
+    // This query causes a permission error on a public page. It's better to derive status from the `filed-wan` collection.
+    // const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
+    // const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
 
     const allWanRequests = useMemo(() => {
         const wans = [];
         if (filedWans) wans.push(...filedWans);
-        if (usedWans) wans.push(...usedWans);
+        // if (usedWans) wans.push(...usedWans); // We no longer fetch used-wan directly here.
         return wans;
-    }, [filedWans, usedWans]);
+    }, [filedWans]);
 
-    const isLoadingWan = isLoadingFiled || isLoadingUsed;
+    const isLoadingWan = isLoadingFiled;
 
     const approvedLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'processed-cto'),
@@ -844,3 +845,5 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
+
+    
