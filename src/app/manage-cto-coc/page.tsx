@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -22,11 +23,13 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -84,7 +87,8 @@ interface WanRequest extends DocumentData {
     name: string;
     dateOfWan: string;
     totalHours: number;
-    status?: 'available' | 'used';
+    status?: 'available' | 'used' | 'rejected';
+    remarks?: string;
 }
 
 const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
@@ -390,13 +394,8 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                         </div>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <Button variant="outline" onClick={() => {
-                            const cancelButton = document.querySelector('[role="dialog"] button[aria-label="Close"]');
-                            if (cancelButton instanceof HTMLElement) {
-                                cancelButton.click();
-                            }
-                        }}>Keep Pending</Button>
-                        <AlertDialogAction onClick={() => handleCancel(request)}>
+                        <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleCancel(request)} disabled={!remarks}>
                           Confirm Cancel
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -446,19 +445,56 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
   );
 }
 
-function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
+function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequests: WanRequest[] | null, isLoading: boolean, onRejectSuccess: () => void }) {
+  const firestore = useFirestore();
+  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [viewRequest, setViewRequest] = useState<WanRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!wanRequests) return [];
-    if (!searchTerm) return wanRequests;
+    const availableWans = wanRequests.filter(r => r.status === 'available');
+    if (!searchTerm) return availableWans;
 
-    return wanRequests.filter(request =>
+    return availableWans.filter(request =>
       request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       request.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [wanRequests, searchTerm]);
+
+  const handleReject = async (request: WanRequest) => {
+    if (!firestore || !remarks) return;
+
+    try {
+        const batch = writeBatch(firestore);
+
+        // 1. Add to rejected-wan
+        const rejectedWanRef = doc(firestore, 'rejected-wan', request.id);
+        batch.set(rejectedWanRef, { ...request, status: 'rejected', remarks });
+
+        // 2. Delete from filed-wan
+        const filedWanRef = doc(firestore, 'filed-wan', request.id);
+        batch.delete(filedWanRef);
+
+        await batch.commit();
+
+        toast({
+            title: `WAN Rejected`,
+            description: `The WAN request for ${request.name} has been rejected.`
+        });
+        setRemarks('');
+        onRejectSuccess(); // This will trigger a re-fetch in the parent
+
+    } catch (error) {
+        console.error("Error rejecting WAN:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to reject WAN request.'
+        });
+    }
+  };
 
   return (
     <>
@@ -505,10 +541,40 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
                         {request.status || 'available'}
                     </Badge>
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right space-x-1">
                   <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
                     <Eye className="h-5 w-5" />
                   </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
+                        <XCircle className="h-5 w-5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reject WAN Request?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will reject the WAN for {request.name}. Please provide a reason.
+                        </AlertDialogDescription>
+                        <div className="grid gap-2 pt-2">
+                            <Label htmlFor={`remarks-${request.id}`}>Remarks</Label>
+                            <Textarea 
+                                id={`remarks-${request.id}`}
+                                placeholder="Enter rejection reason..." 
+                                value={remarks}
+                                onChange={(e) => setRemarks(e.target.value)}
+                            />
+                        </div>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setRemarks('')}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleReject(request)} disabled={!remarks}>
+                          Confirm Reject
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TableCell>
               </TableRow>
             ))}
@@ -680,13 +746,17 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
     const employeeBalances = useMemo(() => {
         if (!wanRequests) return [];
         
-        const filteredWans = wanRequests.filter(wan => {
-            const date = new Date(wan.dateOfWan);
-            if (selectedYear !== 'all' && format(date, 'yyyy') !== selectedYear) return false;
-            if (selectedMonth !== 'all' && format(date, 'MMMM') !== selectedMonth) return false;
-            if (searchTerm && !wan.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-            return true;
-        });
+        let filteredWans = wanRequests;
+
+        if (selectedYear !== 'all') {
+            filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'yyyy') === selectedYear);
+        }
+        if (selectedMonth !== 'all') {
+            filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth);
+        }
+        if (searchTerm) {
+            filteredWans = filteredWans.filter(wan => wan.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        }
 
         const balances = filteredWans.reduce((acc, wan) => {
             if (!acc[wan.name]) {
@@ -697,6 +767,14 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
             }
             return acc;
         }, {} as Record<string, { totalHours: number }>);
+
+        // Also ensure employees with 0 balance for the period are shown if they have WANs in that period
+        filteredWans.forEach(wan => {
+            if (!balances[wan.name]) {
+                balances[wan.name] = { totalHours: 0 };
+            }
+        });
+
 
         return Object.entries(balances).map(([name, data]) => ({ name, ...data }));
     }, [wanRequests, selectedYear, selectedMonth, searchTerm]);
@@ -774,6 +852,9 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
 export default function ManageCtoCocPage() {
     const firestore = useFirestore();
 
+    // Use a state variable to force re-fetch
+    const [wanDataVersion, setWanDataVersion] = useState(0);
+
     const pendingLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'to-process-leave'),
         [firestore]
@@ -782,18 +863,17 @@ export default function ManageCtoCocPage() {
 
     const filedWanQuery = useMemoFirebase(
         () => collection(firestore, 'filed-wan'),
-        [firestore]
+        [firestore, wanDataVersion] // Add version to dependency array
     );
     const { data: filedWans, isLoading: isLoadingFiled } = useCollection<WanRequest>(filedWanQuery);
     
-    // This query causes a permission error on a public page. It's better to derive status from the `filed-wan` collection.
     const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
     const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
 
     const allWanRequests = useMemo(() => {
-        const wans = [];
-        if (filedWans) wans.push(...filedWans);
-        if (usedWans) wans.push(...usedWans); // We no longer fetch used-wan directly here.
+        const wans: WanRequest[] = [];
+        if (filedWans) wans.push(...filedWans.map(w => ({...w, status: 'available' as const})));
+        if (usedWans) wans.push(...usedWans.map(w => ({...w, status: 'used' as const})));
         return wans;
     }, [filedWans, usedWans]);
 
@@ -842,7 +922,11 @@ export default function ManageCtoCocPage() {
                 <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
               </TabsContent>
               <TabsContent value="filed-wan" className="pt-4">
-                <FiledWanTable wanRequests={allWanRequests} isLoading={isLoadingWan} />
+                <FiledWanTable 
+                    wanRequests={allWanRequests} 
+                    isLoading={isLoadingWan}
+                    onRejectSuccess={() => setWanDataVersion(v => v + 1)} 
+                />
               </TabsContent>
                <TabsContent value="wan-balances" className="pt-4">
                 <WanBalances wanRequests={allWanRequests} isLoading={isLoadingWan} />
@@ -867,3 +951,5 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
+
+    
