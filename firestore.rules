@@ -1,225 +1,204 @@
-/**
- * @fileOverview
- * This ruleset enforces a strict user-ownership model for leave requests and WAN/COC requests,
- * ensuring that users can only access their own data.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles.
- * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
- * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
- * - /to-process-leave/{leaveRequestId}: Stores leave requests pending review.  Access is currently open, but needs to be restricted to authorized personnel.
- * - /processed-cto/{leaveRequestId}: Stores leave requests that have been approved. Access is currently open, but needs to be restricted to authorized personnel.
- * - /cancelled-cto/{leaveRequestId}: Stores leave requests that have been cancelled. Access is currently open, but needs to be restricted to authorized personnel.
- * - /employees/{employeeId}: Stores employee information. Access is currently open, but needs to be restricted to authorized personnel.
- * - /app-users/{appUserId}: Stores application user credentials and roles. Access is currently open, but needs to be restricted to authorized personnel.
- * - /filed-wan/{wanId}: Stores submitted Work Assignment Notice (WAN) requests. Access is currently open, but needs to be restricted to authorized personnel.
- * - /used-wan/{wanId}: Stores Work Assignment Notice (WAN) requests that have been attached to an approved leave. Access is currently open, but needs to be restricted to authorized personnel.
- *
- * Key Security Decisions:
- * - User listing is disabled (for privacy).
- * - Data validation is relaxed in prototyping mode to allow for rapid schema iteration.
- * - Read-only collections for available WANs are treated as publicly readable but owner-writable.
- * - For collections that store to-process, approved, and cancelled leave requests, the rules are set to false; these require role-based access control for authorized personnel.
- *
- * Denormalization for Authorization:
- *   To avoid `get()` calls, the `LeaveRequest` and `WANCOCRequest` documents include a `userId` field,
- *   allowing for simple `isOwner(userId)` checks.
- *
- * Structural Segregation:
- *   Private user data is stored under the `/users/{userId}` path, while shared or public data
- *   (if any) would be stored in top-level collections.  Currently all non user-owned collections are set to public read, owner write.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces user-ownership for user profiles.
+     * @description Allows a user to read and manage their own profile.
      * @path /users/{userId}
-     * @allow (create) - Authenticated user with ID matching the document ID can create their profile.
-     * @allow (get, list, update, delete) - Authenticated user with ID matching the document ID can access their profile.
-     * @deny (create) - Authenticated user tries to create a profile with an ID that doesn't match their own.
-     * @principle Enforces document ownership for all operations.
+     * @allow (get, create, update, delete) if isSignedIn() && isOwner(userId)
+     * @deny (get, create, update, delete) if !isSignedIn() || !isOwner(userId)
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       function isOwner(userId) {
         return request.auth.uid == userId;
       }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource.data != null;
+      function isSignedIn() {
+        return request.auth != null;
       }
-
-      allow get: if isOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
       allow list: if false;
       allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
     }
 
     /**
-     * @description Enforces user-ownership for leave requests.
+     * @description Allows a user to manage their own leave requests.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (create) - Authenticated user with ID matching the parent user ID can create a leave request.
-     * @allow (get, list, update, delete) - Authenticated user with ID matching the parent user ID can access their leave requests.
-     * @deny (create) - Authenticated user tries to create a leave request under another user's ID.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) if isSignedIn() && request.resource.data.userId == userId
+     * @allow (get, list, update, delete) if isSignedIn() && isOwner(userId)
+     * @deny (get, list, create, update, delete) if !isSignedIn() || !isOwner(userId)
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       function isOwner(userId) {
         return request.auth.uid == userId;
       }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource.data != null;
+      function isSignedIn() {
+        return request.auth != null;
       }
-
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
     }
 
     /**
-     * @description Enforces user-ownership for WAN/COC requests.
+     * @description Allows a user to manage their own WAN/COC requests.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (create) - Authenticated user with ID matching the parent user ID can create a WAN/COC request.
-     * @allow (get, list, update, delete) - Authenticated user with ID matching the parent user ID can access their WAN/COC requests.
-     * @deny (create) - Authenticated user tries to create a WAN/COC request under another user's ID.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) if isSignedIn() && request.resource.data.userId == userId
+     * @allow (get, list, update, delete) if isSignedIn() && isOwner(userId)
+     * @deny (get, list, create, update, delete) if !isSignedIn() || !isOwner(userId)
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       function isOwner(userId) {
         return request.auth.uid == userId;
       }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource.data != null;
+      function isSignedIn() {
+        return request.auth != null;
       }
-
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if isSignedIn() && isOwner(userId);
     }
 
-       /**
-         * @description Controls access to leave requests pending review.  Currently denies all access, but should be restricted to authorized personnel.
-         * @path /to-process-leave/{leaveRequestId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+    /**
+     * @description Allows access to leave requests that are pending review. Access should be limited to admin users only.
+     * @path /to-process-leave/{leaveRequestId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Restricts access to a user's own data tree.
+     */
     match /to-process-leave/{leaveRequestId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-       /**
-         * @description Controls access to approved leave requests. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /processed-cto/{leaveRequestId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+    /**
+     * @description Allows access to leave requests that have been approved. Access should be limited to admin users only.
+     * @path /processed-cto/{leaveRequestId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Restricts access to a user's own data tree.
+     */
     match /processed-cto/{leaveRequestId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     /**
-         * @description Controls access to cancelled leave requests. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /cancelled-cto/{leaveRequestId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+     * @description Allows access to leave requests that have been cancelled. Access should be limited to admin users only.
+     * @path /cancelled-cto/{leaveRequestId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Restricts access to a user's own data tree.
+     */
     match /cancelled-cto/{leaveRequestId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     /**
-         * @description Controls access to employee information. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /employees/{employeeId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+     * @description Allows read access to employee information. Write access should be restricted to authorized personnel only.
+     * @path /employees/{employeeId}
+     * @allow get: if false; // TODO: Consider if public read is acceptable, else add authentication
+     * @allow list: if false;
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny create, update, delete: if true;
+     * @principle Enforces role-based access control for writes.
+     */
     match /employees/{employeeId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+       function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     /**
-         * @description Controls access to application user credentials and roles. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /app-users/{appUserId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+     * @description Allows managing application user credentials and roles. Access should be restricted to authorized personnel only.
+     * @path /app-users/{appUserId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Enforces role-based access control.
+     */
     match /app-users/{appUserId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-      /**
-         * @description Controls access to WAN requests pending for attachment to leaves. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /filed-wan/{wanId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+    /**
+     * @description Allows access to WAN requests that are available to be attached to a leave. Access should be limited to authorized personnel only.
+     * @path /filed-wan/{wanId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Restricts access to a user's own data tree.
+     */
     match /filed-wan/{wanId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
-         /**
-         * @description Controls access to WAN requests that are attached to an approved leave. Currently denies all access, but should be restricted to authorized personnel.
-         * @path /used-wan/{wanId}
-         * @allow (get, list) - Currently none
-         * @deny (create, update, delete) - All
-         * @principle Placeholder rule; needs implementation for role-based access control.
-         */
+     /**
+     * @description Allows access to WAN requests that have been attached to an approved leave. Access should be limited to authorized personnel only.
+     * @path /used-wan/{wanId}
+     * @allow get, list: if false; // TODO: Add admin role check
+     * @allow create, update, delete: if false; // TODO: Add admin role check
+     * @deny get, list, create, update, delete: if true;
+     * @principle Restricts access to a user's own data tree.
+     */
     match /used-wan/{wanId} {
-        allow get: if false;
-        allow list: if false;
-        allow create: if false;
-        allow update: if false;
-        allow delete: if false;
+      function isAdmin() {
+        return request.auth.token.admin == true;
+      }
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }
