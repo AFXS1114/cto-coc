@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -429,9 +429,25 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-muted/50 border">
-                        <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
-                        <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-lg bg-muted/50 border">
+                            <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
+                            <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
+                        </div>
+                         <div className="flex flex-col sm:flex-row gap-4">
+                            <Button asChild className="w-full">
+                                <Link href="/leave-cto">
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    File Leave/CTO
+                                </Link>
+                            </Button>
+                            <Button asChild className="w-full">
+                                <Link href="/wan-coc">
+                                    <Globe className="mr-2 h-4 w-4" />
+                                    File WAN/COC
+                                </Link>
+                            </Button>
+                        </div>
                     </div>
 
                     <Tabs defaultValue="my-leave-records" className="w-full">
