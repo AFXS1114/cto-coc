@@ -387,6 +387,12 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                     <CheckCircle className="h-5 w-5" />
                   </Button>
                   
+                  <Link href={`/print-leave?id=${request.id}`} target="_blank">
+                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                      <Printer className="h-5 w-5" />
+                    </Button>
+                  </Link>
+
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
