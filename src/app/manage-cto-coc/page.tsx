@@ -77,6 +77,7 @@ interface LeaveRequest extends DocumentData {
   attachedWanCodes?: string[];
   remarks?: string;
   totalHours?: number;
+  startDate: string;
 }
 
 interface WanRequest extends DocumentData {
@@ -105,7 +106,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     const { toast } = useToast();
     const [selectedWans, setSelectedWans] = useState<WanRequest[]>([]);
     
-    const availableWansQuery = useMemoFirebase(() => {
+    const allAvailableWansQuery = useMemoFirebase(() => {
         if (!firestore || !request) return null;
         return query(
             collection(firestore, 'filed-wan'),
@@ -114,7 +115,26 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
         );
     }, [firestore, request]);
     
-    const { data: availableWans, isLoading } = useCollection<WanRequest>(availableWansQuery);
+    const { data: allAvailableWans, isLoading } = useCollection<WanRequest>(allAvailableWansQuery);
+
+    const eligibleWans = useMemo(() => {
+        if (!allAvailableWans || !request.startDate) return [];
+        
+        const leaveStartDate = new Date(request.startDate);
+        const leaveStartMonth = leaveStartDate.getMonth();
+        const leaveStartYear = leaveStartDate.getFullYear();
+
+        return allAvailableWans.filter(wan => {
+            const wanDate = new Date(wan.dateOfWan);
+            const wanMonth = wanDate.getMonth();
+            const wanYear = wanDate.getFullYear();
+
+            // A WAN is eligible if its year is less than the leave's year,
+            // or if the years are the same and its month is less than the leave's month.
+            return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
+        });
+    }, [allAvailableWans, request.startDate]);
+
 
     const requiredHours = request.daysApplied * 8;
     const selectedHours = useMemo(() => {
@@ -183,12 +203,13 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
 
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) setSelectedWans([]); onOpenChange(isOpen); }}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Attach WAN to Approve Leave</DialogTitle>
                     <DialogDescription>
-                        Select available WANs for {request.name} to fulfill the required hours for this leave.
+                        Select available WANs for {request.name} to fulfill the required hours for this leave. 
+                        Only WANs from months prior to the leave start date ({format(new Date(request.startDate), 'MMM yyyy')}) are shown.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -203,10 +224,10 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                         </div>
                     </div>
                     
-                    <p className="font-medium">Available WANs for {request.name}</p>
+                    <p className="font-medium">Eligible WANs for {request.name}</p>
                     <ScrollArea className="h-64 border rounded-md">
                         {isLoading ? <Skeleton className="h-full w-full" /> : 
-                         !availableWans || availableWans.length === 0 ? <p className="p-4 text-center text-muted-foreground">No available WANs found.</p> :
+                         !eligibleWans || eligibleWans.length === 0 ? <p className="p-4 text-center text-muted-foreground">No eligible WANs found.</p> :
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -217,7 +238,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {availableWans.map(wan => (
+                                {eligibleWans.map(wan => (
                                     <TableRow key={wan.id}>
                                         <TableCell>
                                             <Checkbox 
@@ -366,7 +387,12 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                         </div>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <Button variant="outline" onClick={() => setRemarks('')}>Keep Pending</Button>
+                        <Button variant="outline" onClick={() => {
+                            const cancelButton = document.querySelector('[role="dialog"] button[aria-label="Close"]');
+                            if (cancelButton instanceof HTMLElement) {
+                                cancelButton.click();
+                            }
+                        }}>Keep Pending</Button>
                         <AlertDialogAction onClick={() => handleCancel(request)}>
                           Confirm Cancel
                         </AlertDialogAction>
