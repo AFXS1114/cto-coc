@@ -15,7 +15,7 @@ interface LeaveData extends DocumentData {
   position: string;
   daysApplied: number;
   leaveType: string;
-  inclusiveDates: { from: string, to?: string } | string[];
+  inclusiveDates: { from: string, to?: string } | string[] | string;
   leaveCode: string;
   attachedWanCodes?: string[];
   totalHours?: number;
@@ -54,7 +54,10 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
   const isLoading = isLoadingProcessed || isLoadingPending || isLoadingCancelled;
 
   
-  const formatDateRange = (dates: { from: string, to?: string } | string[]) => {
+  const formatDateRange = (dates: { from: string, to?: string } | string[] | string) => {
+    if (typeof dates === 'string') {
+        return format(new Date(dates), 'MM/dd/yyyy');
+    }
     if (Array.isArray(dates)) {
         return dates.map(d => format(new Date(d), 'MM/dd/yyyy')).join(', ');
     }
@@ -276,3 +279,5 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -64,8 +65,21 @@ const leaveFormSchema = z.object({
   inclusiveDates: z.union([
     z.object({ from: z.date(), to: z.date().optional() }),
     z.array(z.date()),
-  ]),
+    z.date(),
+  ]).optional(),
+}).refine(data => {
+    if (data.daysApplied === 1) {
+        return data.inclusiveDates instanceof Date;
+    }
+    if (data.daysApplied > 1) {
+        return Array.isArray(data.inclusiveDates) && data.inclusiveDates.length > 0;
+    }
+    return false;
+}, {
+    message: 'Please select the inclusive date(s).',
+    path: ['inclusiveDates'],
 });
+
 
 type LeaveFormValues = z.infer<typeof leaveFormSchema>;
 
@@ -174,10 +188,7 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
       dateOfFiling: new Date(),
       position: employee?.position || 'Administrative Aide IV',
       daysApplied: 1,
-      inclusiveDates: {
-        from: new Date(),
-        to: undefined,
-      },
+      inclusiveDates: undefined,
     },
   });
 
@@ -185,17 +196,9 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
     control: form.control,
     name: 'daysApplied',
   });
-
+  
   useEffect(() => {
-    if (daysApplied > 1) {
-      if (!Array.isArray(form.getValues('inclusiveDates'))) {
-        form.setValue('inclusiveDates', []);
-      }
-    } else {
-       if (Array.isArray(form.getValues('inclusiveDates'))) {
-        form.setValue('inclusiveDates', { from: new Date(), to: undefined });
-      }
-    }
+    form.setValue('inclusiveDates', undefined);
   }, [daysApplied, form]);
 
 
@@ -213,19 +216,39 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
   }, [employee, form]);
 
   function onSubmit(data: LeaveFormValues) {
-    const inclusiveDatesFormatted = Array.isArray(data.inclusiveDates)
-    ? data.inclusiveDates.map(date => format(date, 'yyyy-MM-dd'))
-    : {
-        from: format(data.inclusiveDates.from, 'yyyy-MM-dd'),
-        to: data.inclusiveDates.to ? format(data.inclusiveDates.to, 'yyyy-MM-dd') : undefined
-      };
+    let inclusiveDatesFormatted;
+    if (data.inclusiveDates instanceof Date) {
+        inclusiveDatesFormatted = format(data.inclusiveDates, 'yyyy-MM-dd');
+    } else if (Array.isArray(data.inclusiveDates)) {
+        inclusiveDatesFormatted = data.inclusiveDates.map(date => format(date, 'yyyy-MM-dd'));
+    } else if (data.inclusiveDates && 'from' in data.inclusiveDates) {
+        inclusiveDatesFormatted = {
+            from: format(data.inclusiveDates.from, 'yyyy-MM-dd'),
+            to: data.inclusiveDates.to ? format(data.inclusiveDates.to, 'yyyy-MM-dd') : undefined
+        };
+    }
+
+    const getStartDate = () => {
+        if (typeof inclusiveDatesFormatted === 'string') return inclusiveDatesFormatted;
+        if (Array.isArray(inclusiveDatesFormatted)) return inclusiveDatesFormatted[0];
+        if (typeof inclusiveDatesFormatted === 'object' && inclusiveDatesFormatted?.from) return inclusiveDatesFormatted.from;
+        return format(new Date(), 'yyyy-MM-dd');
+    }
+    
+    const getEndDate = () => {
+        if (typeof inclusiveDatesFormatted === 'string') return inclusiveDatesFormatted;
+        if (Array.isArray(inclusiveDatesFormatted)) return inclusiveDatesFormatted[inclusiveDatesFormatted.length - 1];
+        if (typeof inclusiveDatesFormatted === 'object') return inclusiveDatesFormatted.to || inclusiveDatesFormatted.from;
+        return getStartDate();
+    }
+
 
     const submissionData = {
         id: data.leaveCode,
         requestType: 'Leave',
         submittedDate: format(new Date(), 'yyyy-MM-dd'),
-        startDate: Array.isArray(inclusiveDatesFormatted) ? inclusiveDatesFormatted[0] : inclusiveDatesFormatted.from,
-        endDate: Array.isArray(inclusiveDatesFormatted) ? inclusiveDatesFormatted[inclusiveDatesFormatted.length - 1] : inclusiveDatesFormatted.to || inclusiveDatesFormatted.from,
+        startDate: getStartDate(),
+        endDate: getEndDate(),
         reason: 'N/A', // Not in form, but in schema
         status: 'Pending',
         userId: 'temp-user-id', // Placeholder, will be replaced with auth user
@@ -430,15 +453,8 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
                             )}
                           >
                             <CalendarIcon className="mr-2 h-4 w-4" />
-                            {field.value && 'from' in field.value && field.value.from ? (
-                              field.value.to ? (
-                                <>
-                                  {format(field.value.from, 'LLL dd, y')} -{' '}
-                                  {format(field.value.to, 'LLL dd, y')}
-                                </>
-                              ) : (
-                                format(field.value.from, 'LLL dd, y')
-                              )
+                            {field.value && field.value instanceof Date ? (
+                                format(field.value, 'LLL dd, y')
                             ) : (
                               <span>Pick a date</span>
                             )}
@@ -448,11 +464,9 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           initialFocus
-                          mode="range"
-                          defaultMonth={field.value && 'from' in field.value ? field.value.from : undefined}
-                          selected={field.value && 'from' in field.value ? { from: field.value.from, to: field.value.to } : undefined}
+                          mode="single"
+                          selected={field.value instanceof Date ? field.value : undefined}
                           onSelect={field.onChange}
-                          numberOfMonths={2}
                         />
                       </PopoverContent>
                     </Popover>

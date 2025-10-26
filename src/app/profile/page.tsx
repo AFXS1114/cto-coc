@@ -62,7 +62,7 @@ interface LeaveRecord extends DocumentData {
   id: string;
   submittedDate: string;
   daysApplied: number;
-  inclusiveDates: { from: string; to?: string } | string[];
+  inclusiveDates: { from: string; to?: string } | string[] | string;
   status: 'Pending' | 'Approved' | 'Cancelled';
   remarks?: string;
 }
@@ -239,7 +239,10 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
 }
 
 
-const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
+const formatDateRange = (dates: { from: string; to?: string } | string[] | string) => {
+    if (typeof dates === 'string') {
+        return format(new Date(dates), 'MMM d, yyyy');
+    }
     if (Array.isArray(dates)) {
         return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
     }
@@ -516,3 +519,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    

@@ -71,7 +71,7 @@ interface LeaveRequest extends DocumentData {
   name: string;
   dateOfFiling: string;
   daysApplied: number;
-  inclusiveDates: { from: string; to?: string } | string[];
+  inclusiveDates: { from: string; to?: string } | string[] | string;
   status?: 'Pending' | 'Approved' | 'Cancelled';
   attachedWanCodes?: string[];
   remarks?: string;
@@ -100,7 +100,10 @@ interface Employee {
   name: string;
 }
 
-const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
+const formatDateRange = (dates: { from: string; to?: string } | string[] | string) => {
+    if (typeof dates === 'string') {
+        return format(new Date(dates), 'MMM d, yyyy');
+    }
   if (Array.isArray(dates)) {
     return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
   }
@@ -726,6 +729,10 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
+    const firestore = useFirestore();
+    const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
+    const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
+
 
     const { years, months } = useMemo(() => {
         const allWans = wanRequests || [];
@@ -743,9 +750,9 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
     }, [wanRequests]);
 
     const employeeBalances = useMemo(() => {
-        if (!wanRequests) return [];
+        if (!employees) return [];
         
-        let filteredWans = wanRequests;
+        let filteredWans = wanRequests || [];
 
         if (selectedYear !== 'all') {
             filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'yyyy') === selectedYear);
@@ -753,15 +760,14 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         if (selectedMonth !== 'all') {
             filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth);
         }
-
-        const employeeNames = new Set(wanRequests.map(w => w.name));
-        const balances = Array.from(employeeNames).reduce((acc, name) => {
-            acc[name] = { totalHours: 0 };
+        
+        const balances = employees.reduce((acc, employee) => {
+            acc[employee.name] = { totalHours: 0 };
             return acc;
         }, {} as Record<string, { totalHours: number }>);
         
         filteredWans.forEach(wan => {
-            if (wan.status === 'available') {
+            if (wan.status === 'available' && balances[wan.name]) {
                 balances[wan.name].totalHours += (wan.totalHours || 0);
             }
         });
@@ -774,10 +780,10 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
 
         return result;
 
-    }, [wanRequests, selectedYear, selectedMonth, searchTerm]);
+    }, [wanRequests, employees, selectedYear, selectedMonth, searchTerm]);
 
 
-    if (isLoading) {
+    if (isLoading || isLoadingEmployees) {
         return (
             <div className="space-y-4 pt-4">
                 <Skeleton className="h-10 w-full" />
@@ -1162,3 +1168,5 @@ export default function ManageCtoCocPage() {
       </div>
     );
 }
+
+    
