@@ -44,6 +44,13 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from "@/components/ui/accordion"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -601,109 +608,112 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
 
 function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedYear, setSelectedYear] = useState<string>('all');
+    const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
-    const groupedWans = useMemo(() => {
-        if (!wanRequests) return {};
-        const availableWans = wanRequests.filter(wan => wan.status === 'available');
-
-        return availableWans.reduce((acc, wan) => {
-            const monthYear = format(new Date(wan.dateOfWan), 'MMMM yyyy');
-            if (!acc[monthYear]) {
-                acc[monthYear] = {};
-            }
-            if (!acc[monthYear][wan.name]) {
-                acc[monthYear][wan.name] = { totalHours: 0 };
-            }
-            acc[monthYear][wan.name].totalHours += (wan.totalHours || 0);
-            return acc;
-        }, {} as Record<string, Record<string, { totalHours: number }>>);
+    const { years, months } = useMemo(() => {
+        if (!wanRequests) return { years: [], months: [] };
+        const yearSet = new Set<string>();
+        const monthSet = new Set<string>();
+        wanRequests.forEach(wan => {
+            const date = new Date(wan.dateOfWan);
+            yearSet.add(format(date, 'yyyy'));
+            monthSet.add(format(date, 'MMMM'));
+        });
+        const sortedYears = Array.from(yearSet).sort((a, b) => parseInt(b) - parseInt(a));
+        const allMonths = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const sortedMonths = allMonths.filter(m => monthSet.has(m));
+        return { years: sortedYears, months: sortedMonths };
     }, [wanRequests]);
 
-    const filteredGroupedWans = useMemo(() => {
-        if (!searchTerm) return groupedWans;
-        const lowercasedFilter = searchTerm.toLowerCase();
-        const filtered: Record<string, Record<string, { totalHours: number }>> = {};
+    const employeeBalances = useMemo(() => {
+        if (!wanRequests) return [];
+        
+        const availableWans = wanRequests.filter(wan => {
+            if (wan.status !== 'available') return false;
+            const date = new Date(wan.dateOfWan);
+            if (selectedYear !== 'all' && format(date, 'yyyy') !== selectedYear) return false;
+            if (selectedMonth !== 'all' && format(date, 'MMMM') !== selectedMonth) return false;
+            if (searchTerm && !wan.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+            return true;
+        });
 
-        for (const monthYear in groupedWans) {
-            const employees = groupedWans[monthYear];
-            const filteredEmployees: Record<string, { totalHours: number }> = {};
-            let monthHasMatch = false;
-
-            for (const name in employees) {
-                if (name.toLowerCase().includes(lowercasedFilter)) {
-                    filteredEmployees[name] = employees[name];
-                    monthHasMatch = true;
-                }
+        const balances = availableWans.reduce((acc, wan) => {
+            if (!acc[wan.name]) {
+                acc[wan.name] = { totalHours: 0 };
             }
-            if (monthHasMatch) {
-                filtered[monthYear] = filteredEmployees;
-            }
-        }
-        return filtered;
-    }, [groupedWans, searchTerm]);
+            acc[wan.name].totalHours += (wan.totalHours || 0);
+            return acc;
+        }, {} as Record<string, { totalHours: number }>);
 
-    const sortedMonths = Object.keys(filteredGroupedWans).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+        return Object.entries(balances).map(([name, data]) => ({ name, ...data }));
+    }, [wanRequests, selectedYear, selectedMonth, searchTerm]);
+
 
     if (isLoading) {
         return (
             <div className="space-y-4 pt-4">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-24 w-full" />
             </div>
         )
     }
 
-    if (Object.keys(groupedWans).length === 0) {
+    if (!wanRequests || wanRequests.filter(w => w.status === 'available').length === 0) {
         return <p className="text-center text-muted-foreground py-4">No available WAN balances found.</p>;
     }
 
 
     return (
         <div>
-            <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                    placeholder="Search by employee name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div className="relative sm:col-span-1">
+                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                        placeholder="Search by employee name..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                    />
+                </div>
+                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Years</SelectItem>
+                        {years.map(year => <SelectItem key={year} value={year}>{year}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger>
+                        <SelectValue placeholder="Select Month" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Months</SelectItem>
+                        {months.map(month => <SelectItem key={month} value={month}>{month}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
-            {sortedMonths.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No matching records found.</p>
+            {employeeBalances.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No matching records found for the selected period.</p>
             ) : (
-            <Accordion type="single" collapsible className="w-full">
-                {sortedMonths.map(monthYear => (
-                    <AccordionItem value={monthYear} key={monthYear}>
-                        <AccordionTrigger>
-                            <div className="flex items-center gap-2">
-                                <Calendar className="h-5 w-5 text-primary" />
-                                <span className="font-semibold text-lg">{monthYear}</span>
-                            </div>
-                        </AccordionTrigger>
-                        <AccordionContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Employee Name</TableHead>
-                                        <TableHead className="text-right">Total Available Hours</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {Object.entries(filteredGroupedWans[monthYear]).map(([name, data]) => (
-                                        <TableRow key={name}>
-                                            <TableCell>{name}</TableCell>
-                                            <TableCell className="text-right font-medium">{(data.totalHours).toFixed(2)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </AccordionContent>
-                    </AccordionItem>
-                ))}
-            </Accordion>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Employee Name</TableHead>
+                            <TableHead className="text-right">Total Available Hours</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {employeeBalances.map((employee) => (
+                            <TableRow key={employee.name}>
+                                <TableCell>{employee.name}</TableCell>
+                                <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
             )}
         </div>
     )
