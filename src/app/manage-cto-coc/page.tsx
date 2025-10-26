@@ -382,9 +382,6 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                 <TableCell>{request.daysApplied}</TableCell>
                 <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  {/* <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
-                    <Eye className="h-5 w-5" />
-                  </Button> */}
                   
                   <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
                     <CheckCircle className="h-5 w-5" />
@@ -535,13 +532,11 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
                     </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-1">
-                  {/*
-                  <Link href={`/wan-coc/print/${request.id}`} target="_blank">
+                  <Link href={`/print-wan?id=${request.id}`} target="_blank">
                     <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
                       <Printer className="h-5 w-5" />
                     </Button>
                   </Link>
-                  */}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
@@ -633,13 +628,11 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
-                                        {/*
-                                        <Link href={`/leave-cto/print/${request.id}`} target="_blank">
+                                        <Link href={`/print-leave?id=${request.id}`} target="_blank">
                                             <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
                                                 <Printer className="h-5 w-5" />
                                             </Button>
                                         </Link>
-                                        */}
                                     </TableCell>
                                 </TableRow>
                             ))}
