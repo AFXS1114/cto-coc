@@ -24,7 +24,7 @@ function PrintWanContent() {
   }
 
   return (
-    <div className="bg-gray-100 font-sans text-sm">
+    <div className="bg-gray-100 font-sans">
         <div className="p-4 sm:p-8 flex justify-center print-container">
             <div className="w-full max-w-4xl bg-white shadow-lg print:shadow-none print-content">
                 <WanPrintForm wanId={wanId} />
@@ -44,10 +44,15 @@ function PrintWanContent() {
                 }
                 .print-container {
                     padding: 0;
+                    margin: 0;
                 }
                 .print-content {
                     box-shadow: none;
                     border: none;
+                }
+                @page {
+                  size: A4;
+                  margin: 1cm;
                 }
             }
         `}</style>

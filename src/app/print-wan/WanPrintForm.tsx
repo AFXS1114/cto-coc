@@ -22,10 +22,9 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
     const [wanData, setWanData] = useState<WanRequest | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [recommendingApprovalName] = useState('NELSA J. TISO');
-    const [recommendingApprovalPosition] = useState('OIC - AFSD');
-    const [approverName] = useState('MARIA FE G. PEÑAFLOR');
-    const [approverPosition] = useState('PORT MANAGER');
+    const [recommendingApprovalName] = useState('ENGR. ROMMEL G. DREU');
+    const [approverName] = useState('FRANCISCO ROMEO G. ESCANDOR JR.');
+    const [approverPosition] = useState('Unit Head/DM/PM');
 
 
     useEffect(() => {
@@ -62,6 +61,19 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
         fetchWanData();
     }, [firestore, wanId]);
 
+    const formatInclusiveTime = (times: {from: string, to: string}[]) => {
+        if (!times || times.length === 0) return 'N/A';
+        return times.map(time => {
+             try {
+                const from = format(new Date(`1970-01-01T${time.from}`), 'h aa');
+                const to = format(new Date(`1970-01-01T${time.to}`), 'h aa');
+                return `${from} / ${to}`;
+             } catch {
+                return `${time.from} / ${time.to}`;
+             }
+        }).join(', ');
+    }
+
     if (isLoading) {
         return <div className="flex h-96 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
@@ -75,85 +87,72 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
     }
 
     return (
-        <div className="p-6 border-2 border-black m-4 text-xs">
-            <div className="text-center mb-4">
-                <h1 className="text-sm font-bold">WORK ASSIGNMENT NOTICE</h1>
+        <div className="p-8 font-serif text-black">
+            <header className="text-center space-y-2 mb-4">
+                <h1 className="font-bold text-lg">PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</h1>
+                <h2 className="font-bold text-xl">WORK ASSIGNMENT NOTICE</h2>
+            </header>
+            
+            <div className="text-right mb-4">
+                <p>WAN Code: <span className="font-bold underline">{wanData.id}</span></p>
             </div>
 
-            <table className="w-full border-collapse border border-black text-left">
+            <p className="mb-4 text-sm">
+                In the extingency of the sevice, the following employee is hereby instructed to report for work on the date and time specified before:
+            </p>
+
+            <table className="w-full border-collapse border border-black text-sm mb-4">
                 <tbody>
-                    <tr>
-                        <td className="border border-black p-1.5 w-1/4">Name</td>
-                        <td className="border border-black p-1.5 w-3/4" colSpan={3}><strong>{wanData.name}</strong></td>
+                    <tr className="bg-yellow-300">
+                        <td className="border border-black p-2 w-1/2">Name of Employee: <br/><strong className="font-sans text-base">{wanData.name}</strong></td>
+                        <td className="border border-black p-2 w-1/2">Unit/Division: <br/><strong className="font-sans text-base">{wanData.unitDivision}</strong></td>
                     </tr>
-                    <tr>
-                        <td className="border border-black p-1.5">Date of WAN</td>
-                        <td className="border border-black p-1.5" colSpan={3}><strong>{format(new Date(wanData.dateOfWan), 'MMMM dd, yyyy')}</strong></td>
-                    </tr>
-                    <tr>
-                        <td className="border border-black p-1.5">Unit/Division</td>
-                        <td className="border border-black p-1.5" colSpan={3}><strong>{wanData.unitDivision}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colSpan={4} className="border border-black p-1.5">
-                            You are hereby directed to render overtime services on the date and time stated below:
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colSpan={2} className="border border-black p-1.5 font-bold text-center">Inclusive Time</td>
-                        <td colSpan={2} className="border border-black p-1.5 font-bold text-center">Nature of Work Assignment/Overtime</td>
-                    </tr>
-                    <tr>
-                        <td colSpan={2} className="border border-black p-1.5 align-top">
-                           {wanData.inclusiveTimes.map((time, index) => (
-                                <div key={index} className="text-center">
-                                    {format(new Date(`1970-01-01T${time.from}`), 'hh:mm a')} - {format(new Date(`1970-01-01T${time.to}`), 'hh:mm a')}
-                                </div>
-                           ))}
-                        </td>
-                        <td colSpan={2} className="border border-black p-1.5 align-top">
-                           <ul className="list-disc pl-5">
-                                {wanData.tasks.map((task, index) => (
-                                    <li key={index}>{task.value}</li>
-                                ))}
-                           </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colSpan={2} className="border border-black p-1.5">
-                            <div className="font-bold text-center">Total Computed Hours:</div>
-                            <div className="font-bold text-center text-base">{wanData.totalHours.toFixed(2)}</div>
-                        </td>
-                        <td colSpan={2} className="border border-black p-1.5">
-                             <div className="h-16"></div>
-                             <div className="text-center border-t border-black w-4/5 mx-auto">Signature of Employee</div>
-                        </td>
-                    </tr>
-                     <tr>
-                        <td colSpan={4} className="border border-black p-1.5 text-center font-bold">
-                            Thank you for your usual cooperation.
-                        </td>
-                    </tr>
-                     <tr>
-                        <td colSpan={2} className="border border-black p-1.5">
-                            <div className="font-bold">Recommending Approval:</div>
-                            <div className="h-12"></div>
-                            <div className="text-center">
-                                <p className="font-bold uppercase border-b border-black w-48 mx-auto">{recommendingApprovalName}</p>
-                                <p>{recommendingApprovalPosition}</p>
-                            </div>
-                        </td>
-                        <td colSpan={2} className="border border-black p-1.5">
-                           <div className="font-bold">Approved:</div>
-                            <div className="h-12"></div>
-                            <div className="text-center">
-                                <p className="font-bold uppercase border-b border-black w-48 mx-auto">{approverName}</p>
-                                <p>{approverPosition}</p>
-                            </div>
-                        </td>
+                    <tr className="bg-yellow-300">
+                        <td className="border border-black p-2">Date/Day: <br/><strong className="font-sans text-base">{format(new Date(wanData.dateOfWan), 'EEEE, MMMM d, yy')}</strong></td>
+                        <td className="border border-black p-2">Inclusive Period/Time: <br/><strong className="font-sans text-base">{formatInclusiveTime(wanData.inclusiveTimes)}</strong></td>
                     </tr>
                 </tbody>
             </table>
+
+            <div className="mb-4">
+                <p className="text-sm">Nature of Work Assignment/Overtime:</p>
+                <div className="border-b border-black mt-2 pb-1 font-sans text-base">
+                    {wanData.tasks.map(task => task.value).join(', ')}
+                </div>
+            </div>
+
+            <div className="mb-8">
+                <p className="font-bold text-sm">Supervisor's Certification:</p>
+                <p className="text-sm italic">
+                    I certifiy that the work assignment is very urgent and it is necessary for the above-named employee to accomplish/complete the same beyond his/her regular reporting schedule due to the extingency of the service.
+                </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8 mb-8">
+                <div className="text-center">
+                    <p className="font-bold">{recommendingApprovalName}</p>
+                    <p className="border-t border-black pt-1 text-xs">Signature over Printed Name</p>
+                </div>
+                <div className="text-center">
+                    <p className="font-bold">&nbsp;</p>
+                    <p className="border-t border-black pt-1 text-xs">Date</p>
+                </div>
+            </div>
+
+            <div className="mb-8">
+                <p className="font-bold">Approved:</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-8">
+                <div className="text-center">
+                    <p className="font-bold">{approverName}</p>
+                    <p className="border-t border-black pt-1 text-xs">{approverPosition}</p>
+                </div>
+                <div className="text-center">
+                    <p className="font-bold">&nbsp;</p>
+                    <p className="border-t border-black pt-1 text-xs">Date</p>
+                </div>
+            </div>
         </div>
     );
 }
