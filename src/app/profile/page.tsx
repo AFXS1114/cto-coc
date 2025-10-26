@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -65,6 +65,13 @@ interface LeaveRecord extends DocumentData {
   inclusiveDates: { from: string; to?: string } | string[];
   status: 'Pending' | 'Approved' | 'Cancelled';
   remarks?: string;
+}
+
+interface WanRecord extends DocumentData {
+  id: string;
+  dateOfWan: string;
+  totalHours: number;
+  status: 'available' | 'used';
 }
 
 const loginSchema = z.object({
@@ -323,6 +330,75 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
   );
 }
 
+function WanRecordsTable({ employee }: { employee: Employee }) {
+    const firestore = useFirestore();
+  
+    const filedWanQuery = useMemoFirebase(() => {
+      if (!firestore || !employee) return null;
+      return query(collection(firestore, 'filed-wan'), where('name', '==', employee.name));
+    }, [firestore, employee]);
+  
+    const usedWanQuery = useMemoFirebase(() => {
+      if (!firestore || !employee) return null;
+      return query(collection(firestore, 'used-wan'), where('name', '==', employee.name));
+    }, [firestore, employee]);
+  
+    const { data: filedWans, isLoading: filedLoading } = useCollection<WanRecord>(filedWanQuery);
+    const { data: usedWans, isLoading: usedLoading } = useCollection<WanRecord>(usedWanQuery);
+  
+    const isLoading = filedLoading || usedLoading;
+  
+    const allRecords = useMemo(() => {
+      if (!filedWans && !usedWans) return [];
+      const records: WanRecord[] = [
+        ...(filedWans?.map(r => ({ ...r, status: 'available' as const })) || []),
+        ...(usedWans?.map(r => ({ ...r, status: 'used' as const })) || []),
+      ].sort((a, b) => new Date(b.dateOfWan).getTime() - new Date(a.dateOfWan).getTime());
+      return records;
+    }, [filedWans, usedWans]);
+  
+    if (isLoading) {
+      return (
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      );
+    }
+  
+    if (allRecords.length === 0) {
+      return <p className="text-center text-muted-foreground">You have no WAN records.</p>;
+    }
+  
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>WAN Code</TableHead>
+            <TableHead>Date of WAN</TableHead>
+            <TableHead className="text-right">Total Hours</TableHead>
+            <TableHead className="text-right">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {allRecords.map((record) => (
+            <TableRow key={record.id}>
+              <TableCell className="font-mono">{record.id}</TableCell>
+              <TableCell>{format(new Date(record.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+              <TableCell className="text-right">{(record.totalHours || 0).toFixed(2)}</TableCell>
+              <TableCell className="text-right">
+                  <Badge variant={record.status === 'used' ? 'destructive' : 'secondary'}>
+                      {record.status}
+                  </Badge>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  }
+
 
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
     return (
@@ -347,12 +423,13 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                     <Tabs defaultValue="my-leave-records" className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="my-leave-records">My Leave Records</TabsTrigger>
-                            <TabsTrigger value="my-wancoc-records" asChild>
-                                <Link href="/my-wancoc-records">My WAN/COC Records</Link>
-                            </TabsTrigger>
+                            <TabsTrigger value="my-wancoc-records">My WAN/COC Records</TabsTrigger>
                         </TabsList>
                         <TabsContent value="my-leave-records" className="pt-4">
                             <LeaveRecordsTable employee={employee} />
+                        </TabsContent>
+                         <TabsContent value="my-wancoc-records" className="pt-4">
+                            <WanRecordsTable employee={employee} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -409,5 +486,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
