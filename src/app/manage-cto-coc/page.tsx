@@ -27,7 +27,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -64,6 +63,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import LeavePrintForm from '@/app/leave-cto/print/[id]/LeavePrintForm';
+import WanPrintForm from '@/app/wan-coc/print/[id]/WanPrintForm';
 
 
 interface LeaveRequest extends DocumentData {
@@ -448,6 +448,7 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
 
 function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewRequest, setViewRequest] = useState<WanRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!wanRequests) return [];
@@ -505,16 +506,37 @@ function FiledWanTable({ wanRequests, isLoading }: { wanRequests: WanRequest[] |
                     </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button asChild variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                    <Link href={`/wan-coc/print/${request.id}`} target="_blank" rel="noopener noreferrer">
-                      <Eye className="h-5 w-5" />
-                    </Link>
+                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
+                    <Eye className="h-5 w-5" />
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+      )}
+       {viewRequest && (
+        <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>WAN Preview</DialogTitle>
+                    <DialogDescription>
+                        Viewing Work Assignment Notice for {viewRequest.name}.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow overflow-y-auto">
+                    <WanPrintForm wanId={viewRequest.id} />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
+                    <Button asChild>
+                        <Link href={`/wan-coc/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
+                            <Printer className="mr-2 h-4 w-4" /> Print
+                        </Link>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       )}
     </>
   );
@@ -765,17 +787,17 @@ export default function ManageCtoCocPage() {
     const { data: filedWans, isLoading: isLoadingFiled } = useCollection<WanRequest>(filedWanQuery);
     
     // This query causes a permission error on a public page. It's better to derive status from the `filed-wan` collection.
-    // const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
-    // const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
+    const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
+    const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
 
     const allWanRequests = useMemo(() => {
         const wans = [];
         if (filedWans) wans.push(...filedWans);
-        // if (usedWans) wans.push(...usedWans); // We no longer fetch used-wan directly here.
+        if (usedWans) wans.push(...usedWans); // We no longer fetch used-wan directly here.
         return wans;
-    }, [filedWans]);
+    }, [filedWans, usedWans]);
 
-    const isLoadingWan = isLoadingFiled;
+    const isLoadingWan = isLoadingFiled || isLoadingUsed;
 
     const approvedLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'processed-cto'),
@@ -845,5 +867,3 @@ export default function ManageCtoCocPage() {
     </div>
   );
 }
-
-    
