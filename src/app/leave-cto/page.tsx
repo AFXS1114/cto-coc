@@ -266,11 +266,6 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
     toast({
       title: 'Leave Filed Successfully!',
       description: `Your leave request (${data.leaveCode}) has been submitted.`,
-      action: (
-        <Button onClick={() => router.push(`/leave-cto/print/${data.leaveCode}`)}>
-          Print Form
-        </Button>
-      )
     });
     
     onBack();

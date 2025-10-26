@@ -305,11 +305,6 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
     toast({
       title: 'WAN Filed Successfully!',
       description: `Your WAN request (${data.wanCode}) has been submitted.`,
-      action: (
-        <Button onClick={() => router.push(`/wan-coc/print/${data.wanCode}`)}>
-          Print Form
-        </Button>
-      )
     });
     
     onBack();

@@ -58,8 +58,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import LeavePrintForm from '@/app/leave-cto/print/[id]/LeavePrintForm';
-import WanPrintForm from '@/app/wan-coc/print/[id]/WanPrintForm';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -102,16 +100,30 @@ interface Employee {
 
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string) => {
     if (typeof dates === 'string') {
-        return format(new Date(dates), 'MMM d, yyyy');
+        try {
+            return format(new Date(dates), 'MMM d, yyyy');
+        } catch (e) {
+            return dates;
+        }
     }
   if (Array.isArray(dates)) {
-    return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
+    return dates.map(d => {
+        try {
+            return format(new Date(d), 'MMM d, yyyy')
+        } catch(e) {
+            return d;
+        }
+    }).join(', ');
   }
   if (typeof dates === 'object' && dates.from) {
-    if (dates.to) {
-      return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
+    try {
+        if (dates.to) {
+          return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
+        }
+        return format(new Date(dates.from), 'MMM d, yyyy');
+    } catch(e) {
+        return dates.from;
     }
-    return format(new Date(dates.from), 'MMM d, yyyy');
   }
   return 'N/A';
 };
@@ -135,17 +147,21 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     const eligibleWans = useMemo(() => {
         if (!allAvailableWans || !request.startDate) return [];
         
-        const leaveStartDate = new Date(request.startDate);
-        const leaveStartMonth = leaveStartDate.getMonth();
-        const leaveStartYear = leaveStartDate.getFullYear();
+        try {
+            const leaveStartDate = new Date(request.startDate);
+            const leaveStartMonth = leaveStartDate.getMonth();
+            const leaveStartYear = leaveStartDate.getFullYear();
 
-        return allAvailableWans.filter(wan => {
-            const wanDate = new Date(wan.dateOfWan);
-            const wanMonth = wanDate.getMonth();
-            const wanYear = wanDate.getFullYear();
+            return allAvailableWans.filter(wan => {
+                const wanDate = new Date(wan.dateOfWan);
+                const wanMonth = wanDate.getMonth();
+                const wanYear = wanDate.getFullYear();
 
-            return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
-        });
+                return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
+            });
+        } catch(e) {
+            return [];
+        }
     }, [allAvailableWans, request.startDate]);
 
 
@@ -222,7 +238,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                     <DialogTitle>Attach WAN to Approve Leave</DialogTitle>
                     <DialogDescription>
                         Select available WANs for {request.name} to fulfill the required hours for this leave. 
-                        Only WANs from months prior to the leave start date ({format(new Date(request.startDate), 'MMM yyyy')}) are shown.
+                        Only WANs from months prior to the leave start date ({format(new Date(request.startDate || Date.now()), 'MMM yyyy')}) are shown.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -287,7 +303,6 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
   const [remarks, setRemarks] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-  const [viewRequest, setViewRequest] = useState<LeaveRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!pendingRequests) return [];
@@ -367,9 +382,9 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                 <TableCell>{request.daysApplied}</TableCell>
                 <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
+                  {/* <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
                     <Eye className="h-5 w-5" />
-                  </Button>
+                  </Button> */}
                   
                   <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
                     <CheckCircle className="h-5 w-5" />
@@ -422,29 +437,6 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
           request={selectedRequest}
         />
       )}
-      {viewRequest && (
-        <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>Leave Application Preview</DialogTitle>
-                    <DialogDescription>
-                        Viewing leave application for {viewRequest.name}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="flex-grow overflow-y-auto">
-                    <LeavePrintForm leaveId={viewRequest.id} />
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
-                    <Button asChild>
-                        <Link href={`/leave-cto/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
-                            <Printer className="mr-2 h-4 w-4" /> Print
-                        </Link>
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-      )}
     </>
   );
 }
@@ -454,7 +446,6 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [viewRequest, setViewRequest] = useState<WanRequest | null>(null);
 
   const filteredRequests = useMemo(() => {
     if (!wanRequests) return [];
@@ -544,9 +535,13 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
                     </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
-                    <Eye className="h-5 w-5" />
-                  </Button>
+                  {/*
+                  <Link href={`/wan-coc/print/${request.id}`} target="_blank">
+                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                      <Printer className="h-5 w-5" />
+                    </Button>
+                  </Link>
+                  */}
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
@@ -583,29 +578,6 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
           </TableBody>
         </Table>
       )}
-       {viewRequest && (
-        <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>WAN Preview</DialogTitle>
-                    <DialogDescription>
-                        Viewing Work Assignment Notice for {viewRequest.name}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="flex-grow overflow-y-auto">
-                    <WanPrintForm wanId={viewRequest.id} />
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
-                    <Button asChild>
-                        <Link href={`/wan-coc/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
-                            <Printer className="mr-2 h-4 w-4" /> Print
-                        </Link>
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-      )}
     </>
   );
 }
@@ -613,7 +585,6 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
 function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { approvedRequests: LeaveRequest[] | null, cancelledRequests: LeaveRequest[] | null, isLoading: boolean }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('approved');
-    const [viewRequest, setViewRequest] = useState<LeaveRequest | null>(null);
 
     const filteredApproved = useMemo(() => {
         if (!approvedRequests) return [];
@@ -662,9 +633,13 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => setViewRequest(request)}>
-                                            <Eye className="h-5 w-5" />
-                                        </Button>
+                                        {/*
+                                        <Link href={`/leave-cto/print/${request.id}`} target="_blank">
+                                            <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
+                                                <Printer className="h-5 w-5" />
+                                            </Button>
+                                        </Link>
+                                        */}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -698,29 +673,6 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                     }
                 </TabsContent>
             </Tabs>
-            {viewRequest && (
-                <Dialog open={!!viewRequest} onOpenChange={(isOpen) => !isOpen && setViewRequest(null)}>
-                    <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-                        <DialogHeader>
-                            <DialogTitle>Leave Application Preview</DialogTitle>
-                            <DialogDescription>
-                                Viewing leave application for {viewRequest.name}.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex-grow overflow-y-auto">
-                            <LeavePrintForm leaveId={viewRequest.id} />
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setViewRequest(null)}>Close</Button>
-                            <Button asChild>
-                                <Link href={`/leave-cto/print/${viewRequest.id}`} target="_blank" rel="noopener noreferrer">
-                                    <Printer className="mr-2 h-4 w-4" /> Print
-                                </Link>
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            )}
         </div>
     );
 }
@@ -1140,7 +1092,12 @@ export default function ManageCtoCocPage() {
       setIsClient(true);
       const adminData = sessionStorage.getItem('loggedInAdmin');
       if (adminData) {
-        setLoggedInAdmin(JSON.parse(adminData));
+        try {
+          setLoggedInAdmin(JSON.parse(adminData));
+        } catch (e) {
+            console.error("Failed to parse admin data from session storage", e);
+            sessionStorage.removeItem('loggedInAdmin');
+        }
       }
     }, []);
   
