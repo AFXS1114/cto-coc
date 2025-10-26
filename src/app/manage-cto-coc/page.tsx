@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -29,7 +28,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
   Dialog,
@@ -40,25 +38,19 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-} from "@/components/ui/accordion"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Info, Printer, Calendar } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -67,6 +59,10 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import LeavePrintForm from '@/app/leave-cto/print/[id]/LeavePrintForm';
 import WanPrintForm from '@/app/wan-coc/print/[id]/WanPrintForm';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 
 interface LeaveRequest extends DocumentData {
@@ -89,6 +85,18 @@ interface WanRequest extends DocumentData {
     totalHours: number;
     status?: 'available' | 'used' | 'rejected';
     remarks?: string;
+}
+
+interface AppUser extends DocumentData {
+    id: string;
+    employeeId: string;
+    password?: string;
+    restrictionLevel: 'Employee' | 'System Admin' | 'Records Admin';
+}
+
+interface Employee {
+  id: string;
+  name: string;
 }
 
 const formatDateRange = (dates: { from: string; to?: string } | string[]) => {
@@ -132,8 +140,6 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
             const wanMonth = wanDate.getMonth();
             const wanYear = wanDate.getFullYear();
 
-            // A WAN is eligible if its year is less than the leave's year,
-            // or if the years are the same and its month is less than the leave's month.
             return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
         });
     }, [allAvailableWans, request.startDate]);
@@ -166,7 +172,6 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
         try {
             const batch = writeBatch(firestore);
 
-            // 1. Add to processed-cto
             const newDocRef = doc(firestore, 'processed-cto', request.id);
             batch.set(newDocRef, { 
                 ...request, 
@@ -175,17 +180,14 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                 totalHours: selectedHours
             });
             
-            // 2. Move WANs from 'filed-wan' to 'used-wan'
             selectedWans.forEach(wan => {
-                // Add to used-wan
                 const usedWanRef = doc(firestore, 'used-wan', wan.id);
                 batch.set(usedWanRef, { ...wan, status: 'used' });
-                // Delete from filed-wan
+
                 const filedWanRef = doc(firestore, 'filed-wan', wan.id);
                 batch.delete(filedWanRef);
             });
 
-            // 3. Delete from to-process-leave
             const oldDocRef = doc(firestore, 'to-process-leave', request.id);
             batch.delete(oldDocRef);
 
@@ -297,11 +299,9 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
     if (!firestore) return;
     
     try {
-      // 1. Add the document to the cancelled-cto collection
       const newDocRef = doc(firestore, 'cancelled-cto', request.id);
       await setDoc(newDocRef, { ...request, status: 'Cancelled', remarks });
 
-      // 2. Delete the document from the old collection
       const oldDocRef = doc(firestore, 'to-process-leave', request.id);
       await deleteDoc(oldDocRef);
       
@@ -309,7 +309,7 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
         title: `Request Cancelled`,
         description: `The leave request for ${request.name} has been cancelled.`
       });
-      setRemarks(''); // Clear remarks after submission
+      setRemarks('');
 
     } catch (error) {
       console.error('Error cancelling leave status:', error);
@@ -469,11 +469,9 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Add to rejected-wan
         const rejectedWanRef = doc(firestore, 'rejected-wan', request.id);
         batch.set(rejectedWanRef, { ...request, status: 'rejected', remarks });
 
-        // 2. Delete from filed-wan
         const filedWanRef = doc(firestore, 'filed-wan', request.id);
         batch.delete(filedWanRef);
 
@@ -484,7 +482,7 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
             description: `The WAN request for ${request.name} has been rejected.`
         });
         setRemarks('');
-        onRejectSuccess(); // This will trigger a re-fetch in the parent
+        onRejectSuccess();
 
     } catch (error) {
         console.error("Error rejecting WAN:", error);
@@ -725,14 +723,14 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
 
 function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedYear, setSelectedYear] = useState<string>('all');
+    const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
     const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
     const { years, months } = useMemo(() => {
-        if (!wanRequests) return { years: [], months: [] };
+        const allWans = wanRequests || [];
         const yearSet = new Set<string>();
         const monthSet = new Set<string>();
-        wanRequests.forEach(wan => {
+        allWans.forEach(wan => {
             const date = new Date(wan.dateOfWan);
             yearSet.add(format(date, 'yyyy'));
             monthSet.add(format(date, 'MMMM'));
@@ -754,29 +752,27 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         if (selectedMonth !== 'all') {
             filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth);
         }
-        if (searchTerm) {
-            filteredWans = filteredWans.filter(wan => wan.name.toLowerCase().includes(searchTerm.toLowerCase()));
-        }
 
-        const balances = filteredWans.reduce((acc, wan) => {
-            if (!acc[wan.name]) {
-                acc[wan.name] = { totalHours: 0 };
-            }
-            if (wan.status === 'available') {
-                acc[wan.name].totalHours += (wan.totalHours || 0);
-            }
+        const employeeNames = new Set(wanRequests.map(w => w.name));
+        const balances = Array.from(employeeNames).reduce((acc, name) => {
+            acc[name] = { totalHours: 0 };
             return acc;
         }, {} as Record<string, { totalHours: number }>);
-
-        // Also ensure employees with 0 balance for the period are shown if they have WANs in that period
+        
         filteredWans.forEach(wan => {
-            if (!balances[wan.name]) {
-                balances[wan.name] = { totalHours: 0 };
+            if (wan.status === 'available') {
+                balances[wan.name].totalHours += (wan.totalHours || 0);
             }
         });
+        
+        let result = Object.entries(balances).map(([name, data]) => ({ name, ...data }));
 
+        if (searchTerm) {
+            result = result.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()));
+        }
 
-        return Object.entries(balances).map(([name, data]) => ({ name, ...data }));
+        return result;
+
     }, [wanRequests, selectedYear, selectedMonth, searchTerm]);
 
 
@@ -849,10 +845,8 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
     )
 }
 
-export default function ManageCtoCocPage() {
+function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
     const firestore = useFirestore();
-
-    // Use a state variable to force re-fetch
     const [wanDataVersion, setWanDataVersion] = useState(0);
 
     const pendingLeaveQuery = useMemoFirebase(
@@ -863,11 +857,11 @@ export default function ManageCtoCocPage() {
 
     const filedWanQuery = useMemoFirebase(
         () => collection(firestore, 'filed-wan'),
-        [firestore, wanDataVersion] // Add version to dependency array
+        [firestore, wanDataVersion]
     );
     const { data: filedWans, isLoading: isLoadingFiled } = useCollection<WanRequest>(filedWanQuery);
     
-    const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
+    const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore, wanDataVersion]);
     const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
 
     const allWanRequests = useMemo(() => {
@@ -893,63 +887,277 @@ export default function ManageCtoCocPage() {
 
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center p-4 antialiased">
-      <main className="w-full max-w-6xl mt-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-3xl font-headline">Manage CTO/COC</CardTitle>
-            <CardDescription>Review, approve, or cancel pending leave requests.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="pending-leave">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="pending-leave" className="flex items-center gap-2">
-                    Pending Leave
-                    {pendingRequests && pendingRequests.length > 0 && (
-                        <Badge className="h-5 w-5 flex items-center justify-center p-1">{pendingRequests.length}</Badge>
-                    )}
-                    </TabsTrigger>
-                <TabsTrigger value="filed-wan" className="flex items-center gap-2">
-                    Filed WAN
-                    {filedWans && filedWans.length > 0 && (
-                        <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{filedWans.length}</Badge>
-                    )}
-                </TabsTrigger>
-                <TabsTrigger value="wan-balances">WAN Balances</TabsTrigger>
-                <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
-              </TabsList>
-              <TabsContent value="pending-leave" className="pt-4">
-                <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
-              </TabsContent>
-              <TabsContent value="filed-wan" className="pt-4">
-                <FiledWanTable 
-                    wanRequests={allWanRequests} 
-                    isLoading={isLoadingWan}
-                    onRejectSuccess={() => setWanDataVersion(v => v + 1)} 
-                />
-              </TabsContent>
-               <TabsContent value="wan-balances" className="pt-4">
-                <WanBalances wanRequests={allWanRequests} isLoading={isLoadingWan} />
-              </TabsContent>
-              <TabsContent value="cto-coc-records" className="pt-4">
-                <ProcessedRecords 
-                    approvedRequests={approvedRequests} 
-                    cancelledRequests={cancelledRequests}
-                    isLoading={isLoadingApproved || isLoadingCancelled}
-                />
-              </TabsContent>
-            </Tabs>
-            <Button asChild variant="link" className="mt-6 w-full">
-              <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
-              </Link>
+    <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle className="text-3xl font-headline">Manage CTO/COC</CardTitle>
+                <CardDescription>Review, approve, or cancel pending leave requests.</CardDescription>
+            </div>
+            <Button variant="outline" size="icon" onClick={onLogout}>
+                <LogOut className="h-5 w-5" />
+                <span className="sr-only">Logout</span>
             </Button>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+        </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="pending-leave">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="pending-leave" className="flex items-center gap-2">
+                Pending Leave
+                {pendingRequests && pendingRequests.length > 0 && (
+                    <Badge className="h-5 w-5 flex items-center justify-center p-1">{pendingRequests.length}</Badge>
+                )}
+                </TabsTrigger>
+            <TabsTrigger value="filed-wan" className="flex items-center gap-2">
+                Filed WAN
+                {filedWans && filedWans.length > 0 && (
+                    <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{filedWans.length}</Badge>
+                )}
+            </TabsTrigger>
+            <TabsTrigger value="wan-balances">WAN Balances</TabsTrigger>
+            <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
+          </TabsList>
+          <TabsContent value="pending-leave" className="pt-4">
+            <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
+          </TabsContent>
+          <TabsContent value="filed-wan" className="pt-4">
+            <FiledWanTable 
+                wanRequests={allWanRequests} 
+                isLoading={isLoadingWan}
+                onRejectSuccess={() => setWanDataVersion(v => v + 1)} 
+            />
+          </TabsContent>
+           <TabsContent value="wan-balances" className="pt-4">
+            <WanBalances wanRequests={allWanRequests} isLoading={isLoadingWan} />
+          </TabsContent>
+          <TabsContent value="cto-coc-records" className="pt-4">
+            <ProcessedRecords 
+                approvedRequests={approvedRequests} 
+                cancelledRequests={cancelledRequests}
+                isLoading={isLoadingApproved || isLoadingCancelled}
+            />
+          </TabsContent>
+        </Tabs>
+        <Button asChild variant="link" className="mt-6 w-full">
+          <Link href="/">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Home
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
+const adminLoginSchema = z.object({
+  appUserId: z.string().min(1, { message: 'Please select your name.' }),
+  password: z.string().min(1, { message: 'Password is required.'}),
+});
+
+type AdminLoginFormValues = z.infer<typeof adminLoginSchema>;
+
+function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => void }) {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const [showPassword, setShowPassword] = useState(false);
+  
+    const adminUsersQuery = useMemoFirebase(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'app-users'), where('restrictionLevel', 'in', ['System Admin', 'Records Admin']));
+    }, [firestore]);
     
+    const { data: adminUsers, isLoading: isLoadingAdmins } = useCollection<AppUser>(adminUsersQuery);
+
+    const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
+    const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
+
+    const isLoading = isLoadingAdmins || isLoadingEmployees;
+  
+    const form = useForm<AdminLoginFormValues>({
+      resolver: zodResolver(adminLoginSchema),
+      defaultValues: {
+        appUserId: '',
+        password: '',
+      },
+    });
+
+    const getEmployeeName = (employeeId: string) => {
+        return employees?.find(e => e.id === employeeId)?.name || 'Unknown User';
+    }
+  
+    const onSubmit = async (data: AdminLoginFormValues) => {
+      if (!firestore || !adminUsers) return;
+  
+      const selectedUser = adminUsers.find(u => u.id === data.appUserId);
+      
+      if (!selectedUser) {
+          toast({
+              variant: 'destructive',
+              title: 'Login Failed',
+              description: 'Could not find the selected user.',
+          });
+          return;
+      }
+      
+      if (selectedUser.password === data.password) {
+        if (selectedUser.restrictionLevel === 'System Admin' || selectedUser.restrictionLevel === 'Records Admin') {
+            toast({
+                title: 'Login Successful',
+                description: `Welcome, ${getEmployeeName(selectedUser.employeeId)}!`,
+            });
+            sessionStorage.setItem('loggedInAdmin', JSON.stringify(selectedUser));
+            onLoginSuccess(selectedUser);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Access Denied',
+                description: 'You do not have sufficient permissions.',
+            });
+        }
+      } else {
+          toast({
+              variant: 'destructive',
+              title: 'Login Failed',
+              description: 'Incorrect password. Please try again.',
+          });
+          form.resetField('password');
+      }
+    };
+    
+    if (isLoading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <Skeleton className="h-8 w-1/2" />
+                    <Skeleton className="h-4 w-3/4" />
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-6">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+  
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-3xl font-headline">Admin Access</CardTitle>
+          <CardDescription>
+            Please enter your credentials to manage CTO/COC records.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="appUserId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your name from the list" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {adminUsers?.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {getEmployeeName(user.employeeId)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                     <FormControl>
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Enter your password"
+                          {...field}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute inset-y-0 right-0 h-full"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff /> : <Eye />}
+                        </Button>
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+                Login
+              </Button>
+            </form>
+          </Form>
+          <Button asChild variant="link" className="mt-6 w-full">
+              <Link href="/">
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Home
+              </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+}
+
+export default function ManageCtoCocPage() {
+    const [loggedInAdmin, setLoggedInAdmin] = useState<AppUser | null>(null);
+    const [isClient, setIsClient] = useState(false);
+  
+    const handleLogout = () => {
+        sessionStorage.removeItem('loggedInAdmin');
+        setLoggedInAdmin(null);
+    }
+  
+    useEffect(() => {
+      setIsClient(true);
+      const adminData = sessionStorage.getItem('loggedInAdmin');
+      if (adminData) {
+        setLoggedInAdmin(JSON.parse(adminData));
+      }
+    }, []);
+  
+    if (!isClient) {
+      return (
+          <div className="flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
+              <main className="w-full max-w-6xl mt-8">
+                   <div className="flex items-center justify-center h-40">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+              </main>
+          </div>
+      );
+    }
+  
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center p-4 antialiased">
+        <main className="w-full max-w-6xl mt-8">
+          {loggedInAdmin ? (
+            <ManageCtoCocContent onLogout={handleLogout} />
+          ) : (
+            <AdminLogin onLoginSuccess={setLoggedInAdmin} />
+          )}
+        </main>
+      </div>
+    );
+}
