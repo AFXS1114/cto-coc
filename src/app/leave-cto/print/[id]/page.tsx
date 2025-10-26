@@ -5,6 +5,27 @@ import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Printer } from 'lucide-react';
 import LeavePrintForm from './LeavePrintForm';
+import { initializeFirebase } from '@/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+
+// This function tells Next.js which dynamic routes to build at build time.
+export async function generateStaticParams() {
+  // IMPORTANT: This only runs at BUILD time.
+  const { firestore } = initializeFirebase();
+  
+  const collectionsToFetch = ['to-process-leave', 'processed-cto', 'cancelled-cto'];
+  const allIds = new Set<string>();
+
+  for (const col of collectionsToFetch) {
+    const snapshot = await getDocs(collection(firestore, col));
+    snapshot.forEach(doc => allIds.add(doc.id));
+  }
+
+  return Array.from(allIds).map(id => ({
+    id: id,
+  }));
+}
+
 
 export default function PrintLeavePage() {
   const params = useParams();
