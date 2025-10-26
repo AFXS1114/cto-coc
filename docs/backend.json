@@ -395,11 +395,27 @@
           "schema": {
             "$ref": "#/backend/entities/WANRequest"
           },
-          "description": "Stores submitted Work Assignment Notice (WAN) requests. The 'wanId' parameter identifies the specific request.",
+          "description": "Stores submitted Work Assignment Notice (WAN) requests that are available to be attached to a leave. The 'wanId' parameter identifies the specific request.",
           "params": [
             {
               "name": "wanId",
               "description": "The unique identifier of the WAN request."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/used-wan/{wanId}",
+        "definition": {
+          "entityName": "WANRequest",
+          "schema": {
+            "$ref": "#/backend/entities/WANRequest"
+          },
+          "description": "Stores Work Assignment Notice (WAN) requests that have been attached to an approved leave. The 'wanId' parameter identifies the specific request.",
+          "params": [
+            {
+              "name": "wanId",
+              "description": "The unique identifier of the used WAN request."
             }
           ]
         }
@@ -408,5 +424,3 @@
     "reasoning": "The Firestore data structure is designed to store leave and WAN/COC requests, associating them with users.  The structure prioritizes path-based ownership for simplicity and security. Specifically, all `LeaveRequest` and `WANCOCRequest` documents are stored under a user-specific subcollection, enabling simple security rules based on `request.auth.uid`. This eliminates the need for complex `get()` calls in security rules, enabling Authorization Independence and supporting atomic operations.\n\nTo further enhance clarity and QAPs (Rules are not Filters), the `leave_requests` and `wancoc_requests` are stored in dedicated collections. This segregation ensures a homogeneous security posture, as all documents within each collection share the same access requirements.\n\nThe paths enforce clear ownership and enable efficient queries for a user's requests."
   }
 }
-
-    

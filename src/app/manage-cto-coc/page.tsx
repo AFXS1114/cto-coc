@@ -110,8 +110,8 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
         if (!firestore || !request) return null;
         return query(
             collection(firestore, 'filed-wan'),
-            where('name', '==', request.name),
-            where('status', '==', 'available')
+            where('name', '==', request.name)
+            // No status filter here, we'll filter client-side
         );
     }, [firestore, request]);
     
@@ -172,10 +172,14 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                 totalHours: selectedHours
             });
             
-            // 2. Mark WANs as used
+            // 2. Move WANs from 'filed-wan' to 'used-wan'
             selectedWans.forEach(wan => {
-                const wanRef = doc(firestore, 'filed-wan', wan.id);
-                batch.update(wanRef, { status: 'used' });
+                // Add to used-wan
+                const usedWanRef = doc(firestore, 'used-wan', wan.id);
+                batch.set(usedWanRef, { ...wan, status: 'used' });
+                // Delete from filed-wan
+                const filedWanRef = doc(firestore, 'filed-wan', wan.id);
+                batch.delete(filedWanRef);
             });
 
             // 3. Delete from to-process-leave
@@ -759,7 +763,18 @@ export default function ManageCtoCocPage() {
         () => collection(firestore, 'filed-wan'),
         [firestore]
     );
-    const { data: filedWanRequests, isLoading: isLoadingWan } = useCollection<WanRequest>(filedWanQuery);
+    const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore]);
+    const { data: filedWans, isLoading: isLoadingFiled } = useCollection<WanRequest>(filedWanQuery);
+    const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
+
+    const allWanRequests = useMemo(() => {
+        const wans = [];
+        if (filedWans) wans.push(...filedWans);
+        if (usedWans) wans.push(...usedWans);
+        return wans;
+    }, [filedWans, usedWans]);
+
+    const isLoadingWan = isLoadingFiled || isLoadingUsed;
 
     const approvedLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'processed-cto'),
@@ -793,8 +808,8 @@ export default function ManageCtoCocPage() {
                     </TabsTrigger>
                 <TabsTrigger value="filed-wan" className="flex items-center gap-2">
                     Filed WAN
-                    {filedWanRequests && filedWanRequests.length > 0 && (
-                        <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{filedWanRequests.length}</Badge>
+                    {filedWans && filedWans.length > 0 && (
+                        <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{filedWans.length}</Badge>
                     )}
                 </TabsTrigger>
                 <TabsTrigger value="wan-balances">WAN Balances</TabsTrigger>
@@ -804,10 +819,10 @@ export default function ManageCtoCocPage() {
                 <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
               </TabsContent>
               <TabsContent value="filed-wan" className="pt-4">
-                <FiledWanTable wanRequests={filedWanRequests} isLoading={isLoadingWan} />
+                <FiledWanTable wanRequests={allWanRequests} isLoading={isLoadingWan} />
               </TabsContent>
                <TabsContent value="wan-balances" className="pt-4">
-                <WanBalances wanRequests={filedWanRequests} isLoading={isLoadingWan} />
+                <WanBalances wanRequests={allWanRequests} isLoading={isLoadingWan} />
               </TabsContent>
               <TabsContent value="cto-coc-records" className="pt-4">
                 <ProcessedRecords 
