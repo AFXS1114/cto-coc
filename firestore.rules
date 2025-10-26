@@ -9,17 +9,18 @@
  * - `/users/{userId}`: Stores user profile information, accessible only by the user themselves.
  * - `/users/{userId}/leave_requests/{leaveRequestId}`: Stores leave requests, accessible only by the owning user.
  * - `/users/{userId}/wancoc_requests/{wancocRequestId}`: Stores WAN/COC requests, accessible only by the owning user.
- * - `/to-process-leave/{leaveRequestId}`: Stores leave requests pending review; access to this collection is not defined.
- * - `/processed-cto/{leaveRequestId}`: Stores approved leave requests; access to this collection is not defined.
- * - `/cancelled-cto/{leaveRequestId}`: Stores cancelled leave requests; access to this collection is not defined.
- * - `/employees/{employeeId}`: Stores employee information; access to this collection is not defined.
- * - `/app-users/{appUserId}`: Stores application user credentials and roles; access to this collection is not defined.
- * - `/filed-wan/{wanId}`: Stores available WAN requests; access to this collection is not defined.
- * - `/used-wan/{wanId}`: Stores used WAN requests; access to this collection is not defined.
+ * - `/to-process-leave/{leaveRequestId}`: Stores leave requests pending review; access to this collection is not defined and defaults to public access.
+ * - `/processed-cto/{leaveRequestId}`: Stores approved leave requests; access to this collection is not defined and defaults to public access.
+ * - `/cancelled-cto/{leaveRequestId}`: Stores cancelled leave requests; access to this collection is not defined and defaults to public access.
+ * - `/employees/{employeeId}`: Stores employee information; access to this collection is not defined and defaults to public access.
+ * - `/app-users/{appUserId}`: Stores application user credentials and roles; access to this collection is not defined and defaults to public access.
+ * - `/filed-wan/{wanId}`: Stores available WAN requests; access to this collection is not defined and defaults to public access.
+ * - `/used-wan/{wanId}`: Stores used WAN requests; access to this collection is not defined and defaults to public access.
+ * - `/rejected-wan/{wanId}`: Stores rejected WAN requests; access to this collection is not defined and defaults to public access.
  *
  * Key Security Decisions:
  * - User listing is implicitly denied (no top-level `/users` collection).
- * - The security posture for ambiguous relationships (e.g., access to `/to-process-leave`) defaults to denying access.
+ * - The security posture for ambiguous relationships (e.g., access to `/to-process-leave`) defaults to public access.
  * - All write operations are guarded by authorization checks.
  *
  * Denormalization for Authorization:
@@ -111,70 +112,70 @@ service cloud.firestore {
     }
 
     /**
-     * @description Access to leave requests pending review is not defined and therefore denied.
+     * @description Access to leave requests pending review is not defined and therefore defaults to public access.
      * @path /to-process-leave/{leaveRequestId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /to-process-leave/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Access to processed CTO requests is not defined and therefore denied.
+     * @description Access to processed CTO requests is not defined and therefore defaults to public access.
      * @path /processed-cto/{leaveRequestId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /processed-cto/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Access to cancelled CTO requests is not defined and therefore denied.
+     * @description Access to cancelled CTO requests is not defined and therefore defaults to public access.
      * @path /cancelled-cto/{leaveRequestId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /cancelled-cto/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
+     allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Access to employee information is not defined and therefore denied.
+     * @description Access to employee information is not defined and therefore defaults to public access.
      * @path /employees/{employeeId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /employees/{employeeId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Access to app user credentials is not defined and therefore denied.
+     * @description Access to app user credentials is not defined and therefore defaults to public access.
      * @path /app-users/{appUserId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /app-users/{appUserId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
@@ -195,14 +196,28 @@ service cloud.firestore {
     }
 
     /**
-     * @description Access to used WAN requests is not defined and therefore denied.
+     * @description Access to used WAN requests is not defined and therefore defaults to public access.
      * @path /used-wan/{wanId}
-     * @deny all operations.
-     * @principle Explicitly denies access to undefined paths.
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
      */
     match /used-wan/{wanId} {
-      allow get: if false;
-      allow list: if false;
+      allow get: if true;
+      allow list: if true;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    /**
+     * @description Access to rejected WAN requests is not defined and therefore defaults to public access.
+     * @path /rejected-wan/{wanId}
+     * @allow get, list: public read access.
+     * @deny create, update, delete: no write access.
+     */
+    match /rejected-wan/{wanId} {
+      allow get: if true;
+      allow list: if true;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
