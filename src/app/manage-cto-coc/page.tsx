@@ -655,8 +655,7 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
     const employeeBalances = useMemo(() => {
         if (!wanRequests) return [];
         
-        const availableWans = wanRequests.filter(wan => {
-            if (wan.status !== 'available') return false;
+        const filteredWans = wanRequests.filter(wan => {
             const date = new Date(wan.dateOfWan);
             if (selectedYear !== 'all' && format(date, 'yyyy') !== selectedYear) return false;
             if (selectedMonth !== 'all' && format(date, 'MMMM') !== selectedMonth) return false;
@@ -664,11 +663,13 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
             return true;
         });
 
-        const balances = availableWans.reduce((acc, wan) => {
+        const balances = filteredWans.reduce((acc, wan) => {
             if (!acc[wan.name]) {
                 acc[wan.name] = { totalHours: 0 };
             }
-            acc[wan.name].totalHours += (wan.totalHours || 0);
+            if (wan.status === 'available') {
+                acc[wan.name].totalHours += (wan.totalHours || 0);
+            }
             return acc;
         }, {} as Record<string, { totalHours: number }>);
 
@@ -685,8 +686,8 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         )
     }
 
-    if (!wanRequests || wanRequests.filter(w => w.status === 'available').length === 0) {
-        return <p className="text-center text-muted-foreground py-4">No available WAN balances found.</p>;
+    if (!wanRequests || wanRequests.length === 0) {
+        return <p className="text-center text-muted-foreground py-4">No WAN records found.</p>;
     }
 
 
