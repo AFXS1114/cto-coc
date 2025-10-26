@@ -71,7 +71,8 @@ interface WanRecord extends DocumentData {
   id: string;
   dateOfWan: string;
   totalHours: number;
-  status: 'available' | 'used';
+  status: 'available' | 'used' | 'rejected';
+  remarks?: string;
 }
 
 const loginSchema = z.object({
@@ -342,20 +343,27 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
       if (!firestore || !employee) return null;
       return query(collection(firestore, 'used-wan'), where('name', '==', employee.name));
     }, [firestore, employee]);
+
+    const rejectedWanQuery = useMemoFirebase(() => {
+      if (!firestore || !employee) return null;
+      return query(collection(firestore, 'rejected-wan'), where('name', '==', employee.name));
+    }, [firestore, employee]);
   
     const { data: filedWans, isLoading: filedLoading } = useCollection<WanRecord>(filedWanQuery);
     const { data: usedWans, isLoading: usedLoading } = useCollection<WanRecord>(usedWanQuery);
+    const { data: rejectedWans, isLoading: rejectedLoading } = useCollection<WanRecord>(rejectedWanQuery);
   
-    const isLoading = filedLoading || usedLoading;
+    const isLoading = filedLoading || usedLoading || rejectedLoading;
   
     const allRecords = useMemo(() => {
-      if (!filedWans && !usedWans) return [];
+      if (!filedWans && !usedWans && !rejectedWans) return [];
       const records: WanRecord[] = [
         ...(filedWans?.map(r => ({ ...r, status: 'available' as const })) || []),
         ...(usedWans?.map(r => ({ ...r, status: 'used' as const })) || []),
+        ...(rejectedWans?.map(r => ({ ...r, status: 'rejected' as const })) || []),
       ].sort((a, b) => new Date(b.dateOfWan).getTime() - new Date(a.dateOfWan).getTime());
       return records;
-    }, [filedWans, usedWans]);
+    }, [filedWans, usedWans, rejectedWans]);
   
     if (isLoading) {
       return (
@@ -377,6 +385,7 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
           <TableRow>
             <TableHead>WAN Code</TableHead>
             <TableHead>Date of WAN</TableHead>
+            <TableHead>Remarks</TableHead>
             <TableHead className="text-right">Total Hours</TableHead>
             <TableHead className="text-right">Status</TableHead>
           </TableRow>
@@ -386,9 +395,14 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
             <TableRow key={record.id}>
               <TableCell className="font-mono">{record.id}</TableCell>
               <TableCell>{format(new Date(record.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+              <TableCell>{record.remarks || 'N/A'}</TableCell>
               <TableCell className="text-right">{(record.totalHours || 0).toFixed(2)}</TableCell>
               <TableCell className="text-right">
-                  <Badge variant={record.status === 'used' ? 'destructive' : 'secondary'}>
+                  <Badge variant={
+                      record.status === 'used' ? 'destructive' :
+                      record.status === 'rejected' ? 'destructive' :
+                      'secondary'
+                  }>
                       {record.status}
                   </Badge>
               </TableCell>
