@@ -1,221 +1,224 @@
 /**
- * @file Firestore Security Rules
- * @description This ruleset enforces a strict user-ownership model for personal data and defines specific access controls for different collections.
+ * @fileOverview
+ * This ruleset enforces a strict user-ownership model for leave requests and WAN/COC requests,
+ * ensuring that users can only access their own data.
  *
  * Data Structure:
- * - `/users/{userId}`: Stores user profiles. Only the authenticated user can read/write their own profile.
- * - `/users/{userId}/leave_requests/{leaveRequestId}`: Stores leave requests. Only the owning user can manage these.
- * - `/users/{userId}/wancoc_requests/{wancocRequestId}`: Stores WAN/COC requests. Only the owning user can manage these.
- * - `/to-process-leave/{leaveRequestId}`: Stores leave requests pending review, intended for administrative access (not implemented in this prototype).
- * - `/processed-cto/{leaveRequestId}`: Stores leave requests that are approved, intended for administrative access (not implemented in this prototype).
- * - `/cancelled-cto/{leaveRequestId}`: Stores leave requests that have been cancelled, intended for administrative access (not implemented in this prototype).
- * - `/employees/{employeeId}`: Stores employee information, intended for administrative access (not implemented in this prototype).
- * - `/app-users/{appUserId}`: Stores application user credentials, intended for administrative access (not implemented in this prototype).
- * - `/filed-wan/{wanId}`: Stores available WAN requests, intended for administrative access (not implemented in this prototype).
- * - `/used-wan/{wanId}`: Stores used WAN requests, intended for administrative access, and updatable via rule.
+ * - /users/{userId}: Stores user profiles.
+ * - /users/{userId}/leave_requests/{leaveRequestId}: Stores leave requests for a specific user.
+ * - /users/{userId}/wancoc_requests/{wancocRequestId}: Stores WAN/COC requests for a specific user.
+ * - /to-process-leave/{leaveRequestId}: Stores leave requests pending review.  Access is currently open, but needs to be restricted to authorized personnel.
+ * - /processed-cto/{leaveRequestId}: Stores leave requests that have been approved. Access is currently open, but needs to be restricted to authorized personnel.
+ * - /cancelled-cto/{leaveRequestId}: Stores leave requests that have been cancelled. Access is currently open, but needs to be restricted to authorized personnel.
+ * - /employees/{employeeId}: Stores employee information. Access is currently open, but needs to be restricted to authorized personnel.
+ * - /app-users/{appUserId}: Stores application user credentials and roles. Access is currently open, but needs to be restricted to authorized personnel.
+ * - /filed-wan/{wanId}: Stores submitted Work Assignment Notice (WAN) requests. Access is currently open, but needs to be restricted to authorized personnel.
+ * - /used-wan/{wanId}: Stores Work Assignment Notice (WAN) requests that have been attached to an approved leave. Access is currently open, but needs to be restricted to authorized personnel.
  *
  * Key Security Decisions:
- * - Strict user-ownership is enforced for user profiles, leave requests, and WAN/COC requests.
- * - Administrative access is not fully implemented in this prototype and marked with `// TODO:` comments.
- * - Data validation is minimal in this prototyping phase, focusing on relational integrity and ownership.
- * - Listing of documents is generally restricted to the owner, unless explicitly intended to be public.
+ * - User listing is disabled (for privacy).
+ * - Data validation is relaxed in prototyping mode to allow for rapid schema iteration.
+ * - Read-only collections for available WANs are treated as publicly readable but owner-writable.
+ * - For collections that store to-process, approved, and cancelled leave requests, the rules are set to false; these require role-based access control for authorized personnel.
+ *
+ * Denormalization for Authorization:
+ *   To avoid `get()` calls, the `LeaveRequest` and `WANCOCRequest` documents include a `userId` field,
+ *   allowing for simple `isOwner(userId)` checks.
+ *
+ * Structural Segregation:
+ *   Private user data is stored under the `/users/{userId}` path, while shared or public data
+ *   (if any) would be stored in top-level collections.  Currently all non user-owned collections are set to public read, owner write.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profiles.
+     * @description Enforces user-ownership for user profiles.
      * @path /users/{userId}
-     * @allow (get, list) if request.auth.uid == userId
-     * @allow (create) if request.auth.uid == userId && request.resource.data.id == userId
-     * @allow (update) if request.auth.uid == userId && resource.data.id == request.resource.data.id
-     * @deny (delete) User profiles should not be deleted directly.
-     * @principle Enforces document ownership and prevents unauthorized modifications.
+     * @allow (create) - Authenticated user with ID matching the document ID can create their profile.
+     * @allow (get, list, update, delete) - Authenticated user with ID matching the document ID can access their profile.
+     * @deny (create) - Authenticated user tries to create a profile with an ID that doesn't match their own.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId} {
-      // Verified Identity: All operations require the user to be signed in.
       function isSignedIn() {
         return request.auth != null;
       }
 
-      // Ownership: Checks if the request is made by the owner of the document.
       function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
+        return request.auth.uid == userId;
       }
 
-      // Existence Check: Verifies the document exists for update/delete operations.
       function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
+        return isOwner(userId) && resource.data != null;
       }
 
       allow get: if isOwner(userId);
-      allow list: if false; // Listing users is not permitted.
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && resource.data.id == request.resource.data.id;
-      allow delete: if false;
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Controls access to leave requests for a specific user.
+     * @description Enforces user-ownership for leave requests.
      * @path /users/{userId}/leave_requests/{leaveRequestId}
-     * @allow (get, list) if request.auth.uid == userId
-     * @allow (create) if request.auth.uid == userId
-     * @allow (update) if request.auth.uid == userId
-     * @deny (delete) if request.auth.uid != userId
-     * @principle Enforces document ownership for writes.
+     * @allow (create) - Authenticated user with ID matching the parent user ID can create a leave request.
+     * @allow (get, list, update, delete) - Authenticated user with ID matching the parent user ID can access their leave requests.
+     * @deny (create) - Authenticated user tries to create a leave request under another user's ID.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/leave_requests/{leaveRequestId} {
-      // Verified Identity: All operations require the user to be signed in.
       function isSignedIn() {
         return request.auth != null;
       }
 
-      // Ownership: Checks if the request is made by the owner of the document.
       function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
+        return request.auth.uid == userId;
       }
 
-      // Existence Check: Verifies the document exists for update/delete operations.
       function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
+        return isOwner(userId) && resource.data != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Controls access to WAN/COC requests for a specific user.
+     * @description Enforces user-ownership for WAN/COC requests.
      * @path /users/{userId}/wancoc_requests/{wancocRequestId}
-     * @allow (get, list) if request.auth.uid == userId
-     * @allow (create) if request.auth.uid == userId
-     * @allow (update) if request.auth.uid == userId
-     * @deny (delete) if request.auth.uid != userId
-     * @principle Enforces document ownership for writes.
+     * @allow (create) - Authenticated user with ID matching the parent user ID can create a WAN/COC request.
+     * @allow (get, list, update, delete) - Authenticated user with ID matching the parent user ID can access their WAN/COC requests.
+     * @deny (create) - Authenticated user tries to create a WAN/COC request under another user's ID.
+     * @principle Enforces document ownership for all operations.
      */
     match /users/{userId}/wancoc_requests/{wancocRequestId} {
-      // Verified Identity: All operations require the user to be signed in.
       function isSignedIn() {
         return request.auth != null;
       }
 
-      // Ownership: Checks if the request is made by the owner of the document.
       function isOwner(userId) {
-        return isSignedIn() && request.auth.uid == userId;
+        return request.auth.uid == userId;
       }
 
-      // Existence Check: Verifies the document exists for update/delete operations.
       function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
+        return isOwner(userId) && resource.data != null;
       }
 
       allow get: if isOwner(userId);
       allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId);
       allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
-    /**
-     * @description Controls access to leave requests pending review.  Administrative access is not fully implemented in this prototype.
-     * @path /to-process-leave/{leaveRequestId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+       /**
+         * @description Controls access to leave requests pending review.  Currently denies all access, but should be restricted to authorized personnel.
+         * @path /to-process-leave/{leaveRequestId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /to-process-leave/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
-    /**
-     * @description Controls access to approved leave requests. Administrative access is not fully implemented in this prototype.
-     * @path /processed-cto/{leaveRequestId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+       /**
+         * @description Controls access to approved leave requests. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /processed-cto/{leaveRequestId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /processed-cto/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
-     /**
-     * @description Controls access to cancelled leave requests. Administrative access is not fully implemented in this prototype.
-     * @path /cancelled-cto/{leaveRequestId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+    /**
+         * @description Controls access to cancelled leave requests. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /cancelled-cto/{leaveRequestId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /cancelled-cto/{leaveRequestId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
     /**
-     * @description Controls access to employee information. Administrative access is not fully implemented in this prototype.
-     * @path /employees/{employeeId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+         * @description Controls access to employee information. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /employees/{employeeId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /employees/{employeeId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
     /**
-     * @description Controls access to app user credentials. Administrative access is not fully implemented in this prototype.
-     * @path /app-users/{appUserId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+         * @description Controls access to application user credentials and roles. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /app-users/{appUserId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /app-users/{appUserId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
-    /**
-     * @description Controls access to available WAN requests. Administrative access is not fully implemented in this prototype.
-     * @path /filed-wan/{wanId}
-     * @deny (get, list, create, update, delete)
-     * @principle Restricts access to administrative functions.
-     */
+      /**
+         * @description Controls access to WAN requests pending for attachment to leaves. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /filed-wan/{wanId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /filed-wan/{wanId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        allow get: if false;
+        allow list: if false;
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
     }
 
-     /**
-     * @description Controls access to used WAN requests.  Allows manual updates in the rule.
-     * @path /used-wan/{wanId}
-     * @allow (update) if true;
-     * @deny (get, list, create, delete)
-     * @principle Allows manual updates to used WAN requests.
-     */
+         /**
+         * @description Controls access to WAN requests that are attached to an approved leave. Currently denies all access, but should be restricted to authorized personnel.
+         * @path /used-wan/{wanId}
+         * @allow (get, list) - Currently none
+         * @deny (create, update, delete) - All
+         * @principle Placeholder rule; needs implementation for role-based access control.
+         */
     match /used-wan/{wanId} {
         allow get: if false;
         allow list: if false;
         allow create: if false;
-        allow update: if true;
+        allow update: if false;
         allow delete: if false;
     }
   }
