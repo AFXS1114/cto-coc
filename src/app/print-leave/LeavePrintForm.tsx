@@ -17,6 +17,7 @@ interface LeaveRequest extends DocumentData {
     inclusiveDates: { from: string; to?: string } | string[] | string;
     leaveType?: string;
     attachedWanCodes?: string[];
+    status?: string;
 }
 
 interface WanData {
@@ -78,32 +79,26 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                 setLeaveData(foundDoc);
                 setError(null);
 
+                let totalEarned = 0;
+                
                 if (foundDoc.status === 'Approved' && foundDoc.attachedWanCodes && foundDoc.attachedWanCodes.length > 0) {
                     const wanQuery = query(collection(firestore, 'used-wan'), where('id', 'in', foundDoc.attachedWanCodes));
                     const wanDocs = await getDocs(wanQuery);
-                    
-                    let totalEarned = 0;
                     wanDocs.forEach(doc => {
                         totalEarned += doc.data().totalHours || 0;
                     });
-                    
-                    const lessThisApplication = foundDoc.daysApplied * 8;
-                    const balance = totalEarned - lessThisApplication;
-
-                    setWanDetails({ totalEarned, balance });
                 } else {
-                    // Also check for available WANs for the user to calculate potential balance.
                      const allWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
                      const wanDocs = await getDocs(allWansQuery);
-                     let totalEarned = 0;
                      wanDocs.forEach(doc => {
                          totalEarned += doc.data().totalHours || 0;
                      });
-
-                     const lessThisApplication = foundDoc.daysApplied * 8;
-                     const balance = totalEarned - lessThisApplication;
-                     setWanDetails({ totalEarned, balance });
                 }
+                const lessThisApplication = foundDoc.daysApplied * 8;
+                const balance = totalEarned - lessThisApplication;
+
+                setWanDetails({ totalEarned, balance });
+
             } else {
                 setError(`Leave request with ID ${leaveId} not found.`);
                 setLeaveData(null);
@@ -233,14 +228,14 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         <td className="w-1/2 p-2 align-top">
                              <strong className="text-xs">7(a) CERTIFICATION OF LEAVE CREDITS</strong>
                              <p className="text-left mt-2 text-xs">As of: <strong className="underline">{format(new Date(), 'MM/dd/yyyy')}</strong></p>
+                            {leaveData.attachedWanCodes && leaveData.attachedWanCodes.length > 0 && (
+                                <p className="text-left text-xs mt-1">Attached WAN: {leaveData.attachedWanCodes.join(', ')}</p>
+                            )}
                             <table className="w-full text-center mt-2 border-collapse border border-black text-[9px]">
                                 <thead>
                                     <tr>
                                         <th className="border border-black w-1/3">&nbsp;</th>
-                                        <th className="border border-black p-1 text-left w-1/3">
-                                            Vacation
-                                            <div className="font-normal text-[8px] break-all">{leaveData.attachedWanCodes?.join(', ')}</div>
-                                        </th>
+                                        <th className="border border-black p-1 text-left w-1/3">Vacation</th>
                                         <th className="border border-black w-1/3">Sick</th>
                                     </tr>
                                 </thead>
