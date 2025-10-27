@@ -29,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+} from '@/componentsui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -744,24 +744,21 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
             filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth);
         }
         
-        const balances = employees.reduce((acc, employee) => {
-            acc[employee.name] = { totalHours: 0 };
-            return acc;
-        }, {} as Record<string, { totalHours: number }>);
-        
-        filteredWans.forEach(wan => {
-            if (wan.status === 'available' && balances[wan.name]) {
-                balances[wan.name].totalHours += (wan.totalHours || 0);
-            }
+        const balances = employees.map(employee => {
+            const employeeWans = filteredWans.filter(wan => wan.name === employee.name && wan.status === 'available');
+            const totalHours = employeeWans.reduce((sum, wan) => sum + (wan.totalHours || 0), 0);
+            return {
+                id: employee.id,
+                name: employee.name,
+                totalHours: totalHours
+            };
         });
         
-        let result = Object.entries(balances).map(([name, data]) => ({ name, ...data }));
-
         if (searchTerm) {
-            result = result.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()));
+            return balances.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.includes(searchTerm));
         }
 
-        return result;
+        return balances;
 
     }, [wanRequests, employees, selectedYear, selectedMonth, searchTerm]);
 
@@ -786,7 +783,7 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                 <div className="relative sm:col-span-1">
                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
-                        placeholder="Search by employee name..."
+                        placeholder="Search by name or ID..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10"
@@ -817,13 +814,15 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead>ID No.</TableHead>
                             <TableHead>Employee Name</TableHead>
                             <TableHead className="text-right">Total Available Hours</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {employeeBalances.map((employee) => (
-                            <TableRow key={employee.name}>
+                            <TableRow key={employee.id}>
+                                <TableCell>{employee.id}</TableCell>
                                 <TableCell>{employee.name}</TableCell>
                                 <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
                             </TableRow>
