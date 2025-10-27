@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, getDoc, DocumentData } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
+import { useFirestore } from '@/firebase';
+import { doc, getDoc, DocumentData } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
@@ -15,9 +15,7 @@ interface LeaveRequest extends DocumentData {
     position: string;
     daysApplied: number;
     inclusiveDates: { from: string; to?: string } | string[] | string;
-    leaveType: string;
-    totalHours?: number;
-    attachedWanCodes?: string[];
+    leaveType?: string;
 }
 
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string | undefined) => {
@@ -94,98 +92,123 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
     if (!leaveData) {
         return <div className="p-8 text-center text-muted-foreground">No data to display.</div>;
     }
-
-    const nameParts = leaveData.name.split(' ');
-    const lastName = nameParts.pop() || '';
-    const firstName = nameParts.join(' ');
-
+    
+    const Checkbox = ({ checked = false, label, details }: { checked?: boolean, label: string, details?: string }) => (
+      <div className="flex items-start">
+        <span className={`inline-block w-[10px] h-[10px] border border-black mt-1 mr-2 flex-shrink-0 ${checked ? 'bg-black' : ''}`}></span>
+        <div className="text-xs">
+          {label}
+          {details && <span className="text-[10px] ml-1">{details}</span>}
+        </div>
+      </div>
+    );
+    
 
     return (
-        <div className="p-4 border-2 border-black m-4 text-xs font-serif">
-            <div className="text-center mb-4">
-                <h1 className="text-lg font-bold">APPLICATION FOR LEAVE</h1>
-            </div>
+        <div className="p-4 m-4 text-xs font-serif text-black bg-white" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
+            <h1 className="text-center text-lg font-bold uppercase mb-2">APPLICATION FOR LEAVE</h1>
 
+            {/* Header Table */}
             <table className="w-full border-collapse border border-black text-[10px]">
                 <tbody>
-                    <tr className="bg-yellow-300">
-                        <td className="border border-black p-1.5 w-1/2">1. OFFICE / AGENCY <br /><strong className="text-sm font-sans pl-2">{leaveData.officeAgency || 'PFDA-BFPC'}</strong></td>
-                        <td className="border border-black p-1.5 w-1/2">2. NAME (Last, First, M.I.) <br /><strong className="text-sm font-sans pl-2">{leaveData.name}</strong></td>
-                    </tr>
-                     <tr className="bg-yellow-300">
-                        <td className="border border-black p-1.5">3. DATE OF FILING <br /><strong className="text-sm font-sans pl-2">{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</strong></td>
-                        <td className="border border-black p-1.5">4. POSITION <br /><strong className="text-sm font-sans pl-2">{leaveData.position}</strong></td>
-                         <td className="border border-black p-1.5">5. MONTHLY SALARY <br/><strong className="text-sm font-sans pl-2">&nbsp;</strong></td>
-                    </tr>
-                    <tr className="bg-gray-200">
-                        <td className="border border-black p-1 text-center font-bold" colSpan={3}>6. DETAILS OF APPLICATION</td>
+                    <tr>
+                        <td className="border border-black p-1.5 w-1/4 bg-gray-200 font-bold uppercase">1. OFFICE / AGENCY</td>
+                        <td className="border border-black p-1.5 w-1/4 bg-yellow-300 font-bold text-center">{leaveData.officeAgency || 'PFDA-BFPC'}</td>
+                        <td className="border border-black p-1.5 w-1/4 bg-gray-200 font-bold uppercase">2. NAME (Last, First, M.I.)</td>
+                        <td className="border border-black p-1.5 w-1/4 bg-yellow-300 font-bold text-center">{leaveData.name}</td>
                     </tr>
                     <tr>
-                        <td className="border border-black p-1.5" colSpan={2}>
-                            <div className="font-bold mb-1">6(a) TYPE OF LEAVE TO BE AVAILED FOR</div>
-                            <div className="pl-2 space-y-0.5">
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Vacation Leave (VL) <span className="text-[8px] ml-1">(Sec 51, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Mandatory/Forced Leave (FO) <span className="text-[8px] ml-1">(Sec 25, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Sick Leave (SL) <span className="text-[8px] ml-1">(Sec 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Maternity Leave (ML) <span className="text-[8px] ml-1">(R.A. No. 11210 / IRR Issued by CSC, DOLE and SSS)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Paternity Leave (PYL) <span className="text-[8px] ml-1">(R.A. No. 8187 / CSC MC No. 71 s. 1998, as amended)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Special Privilege Leave (SPL) <span className="text-[8px] ml-1">(Sec 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Solo Parent Leave (PL) <span className="text-[8px] ml-1">(R.A. 8972 / CSC MC No. 8 s. 2004)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Study Leave (STL) <span className="text-[8px] ml-1">(Sec 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>10-Day VAWC Leave (VAWC) <span className="text-[8px] ml-1">(R.A. 9262 / CSC MC No. 15 s. 2005)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Rehabilitation Privilege (RP) <span className="text-[8px] ml-1">(Sec 55, Rule XVI, Omnibus Rules Implementing E.O. No. 292)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Special Leave Benefits for Women (SLBW) <span className="text-[8px] ml-1">(R.A. 9710 / CSC MC No. 25 s. 2010)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Special Emergency (Calamity) Leave (SEL) <span className="text-[8px] ml-1">(CSC MC No. 2 s. 2012, as amended)</span></p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Adoption Leave (AL) <span className="text-[8px] ml-1">(R.A. No. 8552)</span></p>
-                                <div className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2 relative"><span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-bold text-sm">X</span></span>Others (specify) <span className="ml-2 underline font-sans">{leaveData.leaveType || 'Compensatory Time-off'}</span></div>
+                        <td className="border border-black p-1.5 bg-gray-200 font-bold uppercase">3. DATE OF FILING</td>
+                        <td className="border border-black p-1.5 bg-yellow-300 font-bold text-center">{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</td>
+                        <td className="border border-black p-1.5 bg-gray-200 font-bold uppercase">4. POSITION</td>
+                        <td className="border border-black p-1.5 bg-yellow-300 font-bold text-center">{leaveData.position}</td>
+                    </tr>
+                    <tr>
+                        <td className="border border-black p-1.5 bg-gray-200 font-bold uppercase">5. MONTHLY SALARY</td>
+                        <td colSpan={3} className="border border-black p-1.5 h-6"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {/* Section 6 */}
+            <table className="w-full border-collapse border border-black text-[10px] mt-2">
+                <tbody>
+                    <tr><td colSpan={2} className="text-center font-bold bg-gray-200 p-1">6. DETAILS OF APPLICATION</td></tr>
+                    <tr>
+                        <td className="w-1/2 p-2 align-top">
+                            <strong className="text-xs">6(a) TYPE OF LEAVE TO BE AVAILED OF</strong>
+                            <div className="space-y-0.5 mt-1">
+                                <Checkbox label="Vacation Leave (VL)" details="(Sec 51, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="Mandatory/Forced Leave (FL)" details="(Sec 25, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="Sick Leave (SL)" details="(Sec 43, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="Maternity Leave (ML)" details="(R.A. No. 11210 / IRR Issued by CSC, DOLE and SSS)" />
+                                <Checkbox label="Paternity Leave (PL)" details="(R.A. No. 8187 / CSC MC No. 71 s. 1998, as amended)" />
+                                <Checkbox label="Special Privilege Leave (SPL)" details="(Sec 21, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="Solo Parent Leave (SPL)" details="(R.A. 8972 / CSC MC No. 8 s. 2004)" />
+                                <Checkbox label="Study Leave (StL)" details="(Sec 68, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="10-Day VAWC Leave (RA 9262)" details="(R.A. 9262 / CSC MC No. 15 s. 2005)" />
+                                <Checkbox label="Rehabilitation Privilege (RP)" details="(Sec 55, Rule XVI, Omnibus Rules Implementing E.O. No. 292)" />
+                                <Checkbox label="Special Leave Benefits for Women (SLBW)" details="(R.A. 9710 / CSC MC No. 25 s. 2010)" />
+                                <Checkbox label="Special Emergency (Calamity) Leave (SEL)" details="(CSC MC No. 2 s. 2012, as amended)" />
+                                <Checkbox label="Adoption Leave (AL)" details="(R.A. No. 8552)" />
+                                <div className="flex items-center text-xs"><span className="inline-block w-[10px] h-[10px] border border-black mr-2 flex-shrink-0 bg-black"></span>Others (specify): <span className="underline ml-1">{leaveData.leaveType || 'Compensatory Time-off'}</span></div>
                             </div>
                         </td>
-                        <td className="border border-black p-1.5 align-top">
-                             <div className="font-bold mb-1">6(b) DETAILS OF LEAVE</div>
-                             <div className="pl-2 space-y-1">
-                                <p className="font-bold">In case of Vacation/Special Privilege Leave:</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Within the Philippines __________</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Abroad (Specify) __________</p>
-                                <p className="font-bold mt-2">In case of Sick Leave:</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>In Hospital (Specify Illness) __________</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Out-Patient (Specify Illness) __________</p>
-                                <p className="font-bold mt-2">In case of Special Leave for Women:</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>(Specify illness) __________</p>
-                                <p className="font-bold mt-2">In case of Study Leave:</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Completion of Master's Degree</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>BAR / Board Exam Review</p>
-                                <p className="font-bold mt-2">Other purpose:</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Monetization of Leave Credits</p>
-                                <p className="flex items-center pl-2"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Terminal Leave</p>
-                             </div>
+                        <td className="w-1/2 p-2 align-top">
+                            <strong className="text-xs">6(b) DETAILS OF LEAVE</strong>
+                            <div className="mt-1 space-y-2 text-xs">
+                                <div><strong>In case of Vacation/Special Privilege Leave:</strong>
+                                    <div className="pl-4"><Checkbox label="Within the Philippines __________" /></div>
+                                    <div className="pl-4"><Checkbox label="Abroad (Specify) __________" /></div>
+                                </div>
+                                <div><strong>In case of Sick Leave:</strong>
+                                    <div className="pl-4"><Checkbox label="In Hospital (Specify Illness) __________" /></div>
+                                    <div className="pl-4"><Checkbox label="Out-Patient (Specify Illness) __________" /></div>
+                                </div>
+                                <div><strong>In case of Special Leave for Women:</strong>
+                                    <div className="pl-4 text-xs">(Specify illness) __________</div>
+                                </div>
+                                <div><strong>In case of Study Leave:</strong>
+                                    <div className="pl-4"><Checkbox label="Completion of Master's Degree" /></div>
+                                    <div className="pl-4"><Checkbox label="BAR / Board Exam Review" /></div>
+                                </div>
+                                <div><strong>Other purpose:</strong>
+                                    <div className="pl-4"><Checkbox label="Monetization of Leave Credits" /></div>
+                                    <div className="pl-4"><Checkbox label="Terminal Leave" /></div>
+                                </div>
+                            </div>
                         </td>
                     </tr>
                     <tr>
-                         <td className="border border-black p-1" colSpan={2}>
-                            <div className="bg-yellow-300 p-1 font-bold">6(c) NUMBER OF DAYS APPLIED FOR</div>
-                            <p className="pl-4 font-sans text-sm font-bold pt-2">{leaveData.daysApplied} day(s)</p>
-                            <div className="bg-yellow-300 p-1 font-bold mt-2">INCLUSIVE DATES</div>
-                            <p className="pl-4 font-sans text-sm font-bold pt-2">{formatDateRange(leaveData.inclusiveDates)}</p>
+                        <td className="w-1/2 p-1 align-top">
+                            <div className="bg-yellow-300 p-1 font-bold text-xs">6(c) NUMBER OF DAYS APPLIED FOR</div>
+                            <p className="pl-4 font-sans text-sm font-bold pt-2 h-6">{leaveData.daysApplied} day(s)</p>
+                            <div className="bg-yellow-300 p-1 font-bold mt-2 text-xs">INCLUSIVE DATES</div>
+                            <p className="pl-4 font-sans text-sm font-bold pt-2 h-6">{formatDateRange(leaveData.inclusiveDates)}</p>
                         </td>
-                        <td className="border border-black p-1 align-top">
-                            <div className="bg-yellow-300 p-1 font-bold">6(d) COMMUTATION</div>
-                            <div className="pl-4 pt-2 space-y-1">
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Requested</p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>Not Requested</p>
+                        <td className="w-1/2 p-1 align-top">
+                            <div className="bg-yellow-300 p-1 font-bold text-xs">6(d) COMMUTATION</div>
+                            <div className="pl-4 pt-2 space-y-1 text-xs">
+                                <Checkbox label="Requested" />
+                                <Checkbox label="Not Requested" checked />
                             </div>
-                            <div className="mt-16 text-center">
-                                <p className="border-t border-black pt-1 mx-8">Signature of Applicant</p>
+                            <div className="mt-12 text-center">
+                                <p className="border-t border-black pt-1 mx-8 text-[10px]">Signature of Applicant</p>
                             </div>
                         </td>
                     </tr>
-                    <tr className="bg-gray-200">
-                        <td className="border border-black p-1.5 text-center font-bold" colSpan={3}>7. DETAILS OF ACTION ON APPLICATION</td>
-                    </tr>
-                     <tr>
-                        <td className="border border-black p-1.5" colSpan={2}>
-                            <div className="font-bold">7(a) CERTIFICATION OF LEAVE CREDITS</div>
-                            <p className="text-left mt-2">As of: <strong className="underline">_________________</strong></p>
-                            <table className="w-full text-center mt-2 border-collapse border border-black">
+                </tbody>
+            </table>
+
+             {/* Section 7 */}
+            <table className="w-full border-collapse border border-black text-[10px] mt-2">
+                <tbody>
+                    <tr><td colSpan={2} className="text-center font-bold bg-gray-200 p-1">7. DETAILS OF ACTION ON APPLICATION</td></tr>
+                    <tr>
+                        <td className="w-1/2 p-2 align-top">
+                             <strong className="text-xs">7(a) CERTIFICATION OF LEAVE CREDITS</strong>
+                             <p className="text-left mt-2 text-xs">As of: <strong className="underline">_________________</strong></p>
+                            <table className="w-full text-center mt-2 border-collapse border border-black text-[9px]">
                                 <thead>
                                     <tr>
                                         <th className="border border-black w-1/3">&nbsp;</th>
@@ -194,59 +217,46 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td className="border border-black text-left pl-1">Total Earned</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                    </tr>
-                                    <tr>
-                                        <td className="border border-black text-left pl-1">Less this application</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                    </tr>
-                                    <tr>
-                                        <td className="border border-black text-left pl-1">Balance</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                        <td className="border border-black h-4">&nbsp;</td>
-                                    </tr>
+                                    <tr><td className="border border-black text-left pl-1">Total Earned</td><td className="border border-black h-4">&nbsp;</td><td className="border border-black h-4">&nbsp;</td></tr>
+                                    <tr><td className="border border-black text-left pl-1">Less this application</td><td className="border border-black h-4">&nbsp;</td><td className="border border-black h-4">&nbsp;</td></tr>
+                                    <tr><td className="border border-black text-left pl-1">Balance</td><td className="border border-black h-4">&nbsp;</td><td className="border border-black h-4">&nbsp;</td></tr>
                                 </tbody>
                             </table>
                             <div className="text-center mt-4">
-                                <p className="font-bold uppercase border-b border-black w-48 mx-auto">CHERRY ANN S. DE LA ROSA</p>
+                                <p className="font-bold uppercase border-b border-black w-48 mx-auto text-[10px]">CHERRY ANN S. DE LA ROSA</p>
                                 <p className="text-[9px]">HRMO II</p>
                                 <p className="text-[9px]">Admin./Personnel Officer</p>
                             </div>
                         </td>
-                        <td className="border border-black p-1.5 align-top">
-                            <div className="font-bold">7(b) RECOMMENDATION</div>
-                            <div className="pl-4 pt-2 space-y-1">
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>For approval</p>
-                                <p className="flex items-center"><span className="inline-block border border-black w-3 h-3 mr-2"></span>For disapproval due to ______________</p>
+                        <td className="w-1/2 p-2 align-top">
+                            <strong className="text-xs">7(b) RECOMMENDATION</strong>
+                            <div className="pl-4 pt-2 space-y-1 text-xs">
+                                <Checkbox label="For approval" />
+                                <Checkbox label="For disapproval due to ______________" />
                             </div>
                             <div className="text-center mt-20 pt-1">
-                                <p className="font-bold uppercase border-b border-black w-48 mx-auto">ROMMEL G. DREU</p>
+                                <p className="font-bold uppercase border-b border-black w-48 mx-auto text-[10px]">ROMMEL G. DREU</p>
                                 <p className="text-[9px]">Engineer III</p>
                                 <p className="text-[9px]">Authorized Recommending Officer</p>
                             </div>
                         </td>
                     </tr>
                     <tr>
-                        <td className="border border-black p-1.5" colSpan={2}>
-                            <div className="font-bold">7(c) APPROVED FOR:</div>
-                            <p className="pl-4 mt-2">_________ days with pay</p>
-                            <p className="pl-4">_________ days without pay</p>
-                            <p className="pl-4">_________ others (specify)</p>
+                         <td className="p-2 align-top">
+                            <strong className="text-xs">7(c) APPROVED FOR:</strong>
+                            <p className="pl-4 mt-2 text-xs">_________ days with pay</p>
+                            <p className="pl-4 text-xs">_________ days without pay</p>
+                            <p className="pl-4 text-xs">_________ others (specify)</p>
                         </td>
-                         <td className="border border-black p-1.5">
-                            <div className="font-bold">7(d) DISAPPROVED DUE TO:</div>
-                            <p className="mt-2">_________________________</p>
-                            <p>_________________________</p>
+                         <td className="p-2 align-top">
+                            <strong className="text-xs">7(d) DISAPPROVED DUE TO:</strong>
+                            <p className="mt-2 h-6">_________________________</p>
                         </td>
                     </tr>
-                    <tr>
-                        <td colSpan={3} className="border border-black p-1.5 text-center">
+                     <tr>
+                        <td colSpan={2} className="p-2 text-center">
                             <div className="mt-8">
-                                <p className="font-bold uppercase border-b border-black w-56 mx-auto">FRANCISCO ROMEO G. ESCANDOR JR.</p>
+                                <p className="font-bold uppercase border-b border-black w-56 mx-auto text-[10px]">FRANCISCO ROMEO G. ESCANDOR JR.</p>
                                 <p className="text-[9px]">Officer-in-Charge, BFPC/CFP</p>
                                 <p className="text-[9px]">Authorized Approving Officer</p>
                             </div>
