@@ -48,6 +48,17 @@ import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Printer } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import LeavePrintForm from '../print-leave/LeavePrintForm';
+import { ToastAction } from '@/components/ui/toast';
 
 interface Employee {
     id: string;
@@ -169,7 +180,7 @@ function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: E
 }
 
 
-function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => void }) {
+function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onBack: () => void, onFormSubmit: (id: string) => void }) {
   const { toast } = useToast();
   const [leaveCode, setLeaveCode] = useState('');
   const firestore = useFirestore();
@@ -264,9 +275,14 @@ function LeaveForm({ employee, onBack }: { employee: Employee, onBack: () => voi
     setDoc(docRef, submissionData).catch(error => console.error("Error writing document:", error));
     
     toast({
-      title: 'Leave Filed Successfully!',
-      description: `Your leave request (${data.leaveCode}) has been submitted.`,
-    });
+        title: 'Leave Filed Successfully!',
+        description: `Your leave request (${data.leaveCode}) has been submitted.`,
+        action: (
+          <ToastAction altText="View Form" onClick={() => onFormSubmit(data.leaveCode)}>
+            View Form
+          </ToastAction>
+        ),
+      });
     
     onBack();
   }
@@ -509,8 +525,47 @@ function Navbar() {
   );
 }
 
+function PrintPreviewModal({ docId, open, onOpenChange }: { docId: string | null, open: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!docId) return null;
+
+    const handlePrint = () => {
+        const printContent = document.getElementById('print-content');
+        if (printContent) {
+            const originalContents = document.body.innerHTML;
+            document.body.innerHTML = printContent.innerHTML;
+            window.print();
+            document.body.innerHTML = originalContents;
+            window.location.reload();
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl h-[90vh]">
+                <DialogHeader>
+                    <DialogTitle>Print Preview: {docId}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="h-full">
+                    <div id="print-content">
+                        <LeavePrintForm leaveId={docId} />
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4"/> Print</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function LeaveCtoPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+
+  const handleFormSubmit = (id: string) => {
+    setPreviewDocId(id);
+  };
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
@@ -519,9 +574,20 @@ export default function LeaveCtoPage() {
         {!selectedEmployee ? (
             <EmployeeSelector onEmployeeSelect={setSelectedEmployee} />
         ) : (
-            <LeaveForm employee={selectedEmployee} onBack={() => setSelectedEmployee(null)} />
+            <LeaveForm 
+              employee={selectedEmployee} 
+              onBack={() => setSelectedEmployee(null)}
+              onFormSubmit={handleFormSubmit} 
+            />
         )}
       </main>
+      <PrintPreviewModal 
+        docId={previewDocId}
+        open={!!previewDocId}
+        onOpenChange={(isOpen) => { if (!isOpen) setPreviewDocId(null) }}
+    />
     </div>
   );
 }
+
+    
