@@ -41,13 +41,19 @@ function PrintLeaveContent() {
             @media print {
                 body {
                     background-color: #fff;
+                    margin: 0;
                 }
                 .print-container {
                     padding: 0;
+                    margin: 0;
                 }
                 .print-content {
                     box-shadow: none;
                     border: none;
+                }
+                 @page {
+                  size: A4;
+                  margin: 15mm;
                 }
             }
         `}</style>

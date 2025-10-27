@@ -62,6 +62,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import LeavePrintForm from '../print-leave/LeavePrintForm';
+import WanPrintForm from '../print-wan/WanPrintForm';
 
 
 interface LeaveRequest extends DocumentData {
@@ -127,6 +129,42 @@ const formatDateRange = (dates: { from: string; to?: string } | string[] | strin
   }
   return 'N/A';
 };
+
+function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'leave' | 'wan', id: string} | null, open: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!docInfo) return null;
+
+    const handlePrint = () => {
+        const printContent = document.getElementById('print-content');
+        if (printContent) {
+            const originalContents = document.body.innerHTML;
+            document.body.innerHTML = printContent.innerHTML;
+            window.print();
+            document.body.innerHTML = originalContents;
+            // We need to reload to re-attach React listeners
+            window.location.reload();
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl h-[90vh]">
+                <DialogHeader>
+                    <DialogTitle>Print Preview: {docInfo.id}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="h-full">
+                    <div id="print-content">
+                        {docInfo.type === 'leave' && <LeavePrintForm leaveId={docInfo.id} />}
+                        {docInfo.type === 'wan' && <WanPrintForm wanId={docInfo.id} />}
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4"/> Print</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveRequest, onOpenChange: (open: boolean) => void, open: boolean }) {
     const firestore = useFirestore();
@@ -297,7 +335,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     );
 }
 
-function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: LeaveRequest[] | null, isLoading: boolean}) {
+function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingRequests: LeaveRequest[] | null, isLoading: boolean, onPrint: (id: string) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [remarks, setRemarks] = useState('');
@@ -387,11 +425,9 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
                     <CheckCircle className="h-5 w-5" />
                   </Button>
                   
-                  <Link href={`/print-leave?id=${request.id}`} target="_blank">
-                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                      <Printer className="h-5 w-5" />
-                    </Button>
-                  </Link>
+                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                    <Printer className="h-5 w-5" />
+                  </Button>
 
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -444,7 +480,7 @@ function PendingLeaveTable({ pendingRequests, isLoading }: { pendingRequests: Le
   );
 }
 
-function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequests: WanRequest[] | null, isLoading: boolean, onRejectSuccess: () => void }) {
+function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { wanRequests: WanRequest[] | null, isLoading: boolean, onRejectSuccess: () => void, onPrint: (id: string) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -538,11 +574,9 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
                     </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-1">
-                  <Link href={`/print-wan?id=${request.id}`} target="_blank">
-                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                      <Printer className="h-5 w-5" />
-                    </Button>
-                  </Link>
+                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                    <Printer className="h-5 w-5" />
+                  </Button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
@@ -583,7 +617,7 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess }: { wanRequest
   );
 }
 
-function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { approvedRequests: LeaveRequest[] | null, cancelledRequests: LeaveRequest[] | null, isLoading: boolean }) {
+function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPrint }: { approvedRequests: LeaveRequest[] | null, cancelledRequests: LeaveRequest[] | null, isLoading: boolean, onPrint: (id: string) => void }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeTab, setActiveTab] = useState('approved');
 
@@ -634,11 +668,9 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading }: { 
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
                                     <TableCell className="text-right">
-                                        <Link href={`/print-leave?id=${request.id}`} target="_blank">
-                                            <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700">
-                                                <Printer className="h-5 w-5" />
-                                            </Button>
-                                        </Link>
+                                        <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                                            <Printer className="h-5 w-5" />
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -806,6 +838,7 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
 function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
     const firestore = useFirestore();
     const [wanDataVersion, setWanDataVersion] = useState(0);
+    const [previewDoc, setPreviewDoc] = useState<{type: 'leave' | 'wan', id: string} | null>(null);
 
     const pendingLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'to-process-leave'),
@@ -845,6 +878,7 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
 
 
   return (
+    <>
     <Card>
         <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -875,13 +909,18 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
             <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
           </TabsList>
           <TabsContent value="pending-leave" className="pt-4">
-            <PendingLeaveTable pendingRequests={pendingRequests} isLoading={isLoadingPending} />
+            <PendingLeaveTable 
+                pendingRequests={pendingRequests} 
+                isLoading={isLoadingPending}
+                onPrint={(id) => setPreviewDoc({type: 'leave', id})} 
+            />
           </TabsContent>
           <TabsContent value="filed-wan" className="pt-4">
             <FiledWanTable 
                 wanRequests={allWanRequests} 
                 isLoading={isLoadingWan}
-                onRejectSuccess={() => setWanDataVersion(v => v + 1)} 
+                onRejectSuccess={() => setWanDataVersion(v => v + 1)}
+                onPrint={(id) => setPreviewDoc({type: 'wan', id})}
             />
           </TabsContent>
            <TabsContent value="wan-balances" className="pt-4">
@@ -892,6 +931,7 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
                 approvedRequests={approvedRequests} 
                 cancelledRequests={cancelledRequests}
                 isLoading={isLoadingApproved || isLoadingCancelled}
+                onPrint={(id) => setPreviewDoc({type: 'leave', id})}
             />
           </TabsContent>
         </Tabs>
@@ -903,6 +943,12 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
         </Button>
       </CardContent>
     </Card>
+    <PrintPreviewModal 
+        docInfo={previewDoc}
+        open={!!previewDoc}
+        onOpenChange={(isOpen) => { if (!isOpen) setPreviewDoc(null) }}
+    />
+    </>
   );
 }
 
