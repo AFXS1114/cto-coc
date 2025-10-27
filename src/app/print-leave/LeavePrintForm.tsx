@@ -126,9 +126,20 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
 
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
-            <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '20px', lineHeight: '1.2' }}>
+                <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
+                <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
+                <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
+                <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fishport Complex</p>
+                <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
+            </div>
+            
+            <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '5px' }}>
                 APPLICATION FOR LEAVE
             </h1>
+            <div style={{ textAlign: 'right', fontSize: '11px', marginBottom: '10px', paddingRight: '10px'}}>
+                Code: {leaveData.id}
+            </div>
 
             {/* Header Table */}
             <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: '"Times New Roman", Times, serif', fontSize: '13px', tableLayout: 'fixed' }}>
@@ -138,8 +149,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.officeAgency || 'PFDA-BFPC'}</td>
                         <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>2. NAME (Last, First, M.I.)</td>
                         <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>
-                            <div style={{ fontSize: '10px', fontWeight: 'normal', lineHeight: '1.2' }}>{leaveData.id}</div>
-                            <div>{leaveData.name}</div>
+                           {leaveData.name}
                         </td>
                     </tr>
                     <tr>
