@@ -88,8 +88,8 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         totalEarned += doc.data().totalHours || 0;
                     });
                 } else {
-                     const allWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
-                     const wanDocs = await getDocs(allWansQuery);
+                     const allAvailableWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
+                     const wanDocs = await getDocs(allAvailableWansQuery);
                      wanDocs.forEach(doc => {
                          totalEarned += doc.data().totalHours || 0;
                      });
@@ -125,38 +125,31 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
     const lessThisApplicationHours = leaveData.daysApplied * 8;
 
     return (
-        <div className="p-4 m-4 text-xs font-serif text-black bg-white" style={{ fontFamily: '"Times New Roman", Times, serif' }}>
-             <h1 style={{
-                textAlign: 'center',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                textTransform: 'uppercase',
-                marginBottom: '10px'
-             }}>APPLICATION FOR LEAVE</h1>
+        <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
+            <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '10px' }}>
+                APPLICATION FOR LEAVE
+            </h1>
 
             {/* Header Table */}
-            <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontFamily: '"Times New Roman", Times, serif',
-                fontSize: '11px',
-                tableLayout: 'fixed'
-            }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: '"Times New Roman", Times, serif', fontSize: '13px', tableLayout: 'fixed' }}>
                 <tbody>
                     <tr>
-                        <td style={{border: '1px solid black', padding: '4px', width: '25%', background: '#f0f0f0', fontWeight: 'bold', textTransform: 'uppercase'}}>1. OFFICE / AGENCY</td>
-                        <td style={{border: '1px solid black', padding: '4px', width: '25%', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.officeAgency || 'PFDA-BFPC'}</td>
-                        <td style={{border: '1px solid black', padding: '4px', width: '25%', background: '#f0f0f0', fontWeight: 'bold', textTransform: 'uppercase'}}>2. NAME (Last, First, M.I.)</td>
-                        <td style={{border: '1px solid black', padding: '4px', width: '25%', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.name}</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>1. OFFICE / AGENCY</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.officeAgency || 'PFDA-BFPC'}</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>2. NAME (Last, First, M.I.)</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>
+                            <div style={{ fontSize: '10px', fontWeight: 'normal', lineHeight: '1.2' }}>{leaveData.id}</div>
+                            <div>{leaveData.name}</div>
+                        </td>
                     </tr>
                     <tr>
-                        <td style={{border: '1px solid black', padding: '4px', background: '#f0f0f0', fontWeight: 'bold', textTransform: 'uppercase'}}>3. DATE OF FILING</td>
-                        <td style={{border: '1px solid black', padding: '4px', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</td>
-                        <td style={{border: '1px solid black', padding: '4px', background: '#f0f0f0', fontWeight: 'bold', textTransform: 'uppercase'}}>4. POSITION</td>
-                        <td style={{border: '1px solid black', padding: '4px', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.position}</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>3. DATE OF FILING</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>4. POSITION</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.position}</td>
                     </tr>
                     <tr>
-                        <td style={{border: '1px solid black', padding: '4px', background: '#f0f0f0', fontWeight: 'bold', textTransform: 'uppercase'}}>5. MONTHLY SALARY</td>
+                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>5. MONTHLY SALARY</td>
                         <td colSpan={3} style={{border: '1px solid black', padding: '4px', height: '22px'}}></td>
                     </tr>
                 </tbody>
@@ -167,7 +160,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                 <tbody>
                     <tr><td colSpan={2} style={{textAlign: 'center', fontWeight: 'bold', background: '#f0f0f0', padding: '4px', border: '1px solid black'}}>6. DETAILS OF APPLICATION</td></tr>
                     <tr>
-                        <td style={{width: '50%', padding: '5px', verticalAlign: 'top', border: '1px solid black'}}>
+                        <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black'}}>
                             <strong style={{fontSize: '11px'}}>6(a) TYPE OF LEAVE TO BE AVAILED OF</strong>
                             <div style={{marginTop: '2px', fontSize: '10px', lineHeight: '1.4'}}>
                                 <div><span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px'}}></span>Vacation Leave (VL) <span style={{fontSize: '9px'}}>(Sec 51, Rule XVI...)</span></div>
@@ -186,7 +179,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                                 <div><span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px', background: 'black'}}></span>Others (specify): <span style={{textDecoration: 'underline'}}>{leaveData.leaveType || 'Compensatory Time-off'}</span></div>
                             </div>
                         </td>
-                        <td style={{width: '50%', padding: '5px', verticalAlign: 'top', border: '1px solid black'}}>
+                        <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black'}}>
                             <strong style={{fontSize: '11px'}}>6(b) DETAILS OF LEAVE</strong>
                              <div style={{marginTop: '2px', fontSize: '10px', lineHeight: '1.4'}}>
                                 <div><strong>In case of Vacation/Special Privilege Leave:</strong>
@@ -212,13 +205,13 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         </td>
                     </tr>
                     <tr>
-                        <td style={{width: '50%', padding: '5px', verticalAlign: 'top', border: '1px solid black'}}>
-                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px'}}>6(c) NUMBER OF DAYS APPLIED FOR</div>
-                            <div style={{textAlign: 'center', fontWeight: 'bold', paddingTop: '8px', paddingBottom: '8px'}}>{leaveData.daysApplied} day(s)</div>
-                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px'}}>INCLUSIVE DATES</div>
-                            <div style={{textAlign: 'center', paddingTop: '8px', paddingBottom: '8px'}}>{formatDateRange(leaveData.inclusiveDates)}</div>
+                        <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
+                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(c) NUMBER OF DAYS APPLIED FOR</div>
+                            <div style={{paddingTop: '8px', paddingBottom: '8px', fontWeight: 'bold'}}>{leaveData.daysApplied} day(s)</div>
+                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>INCLUSIVE DATES</div>
+                            <div style={{paddingTop: '8px', paddingBottom: '8px'}}>{formatDateRange(leaveData.inclusiveDates)}</div>
                         </td>
-                        <td style={{width: '50%', padding: '5px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
+                        <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
                             <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(d) COMMUTATION</div>
                             <div style={{paddingTop: '8px', paddingLeft: '15px', textAlign: 'left'}}>
                                 <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px'}}></span>Requested<br/>
@@ -277,19 +270,19 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         </td>
                     </tr>
                     <tr>
-                         <td style={{padding: '8px', verticalAlign: 'top', border: '1px solid black'}}>
-                            <strong style={{fontSize: '11px'}}>7(c) APPROVED FOR:</strong>
-                            <p style={{paddingLeft: '15px', marginTop: '8px', fontSize: '11px'}}>_________ days with pay</p>
-                            <p style={{paddingLeft: '15px', fontSize: '11px'}}>_________ days without pay</p>
-                            <p style={{paddingLeft: '15px', fontSize: '11px'}}>_________ others (specify)</p>
-                        </td>
-                         <td style={{padding: '8px', verticalAlign: 'top', border: '1px solid black'}}>
-                            <strong style={{fontSize: '11px'}}>7(d) DISAPPROVED DUE TO:</strong>
-                            <p style={{marginTop: '8px', height: '22px'}}>_________________________</p>
-                        </td>
-                    </tr>
-                     <tr>
-                        <td colSpan={2} style={{padding: '8px', textAlign: 'center', border: '1px solid black'}}>
+                         <td colSpan={2} style={{padding: '8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+                                <div style={{width: '50%'}}>
+                                     <strong style={{fontSize: '11px', display: 'block', textAlign: 'left'}}>7(c) APPROVED FOR:</strong>
+                                     <p style={{paddingLeft: '15px', marginTop: '8px', fontSize: '11px', textAlign: 'left'}}>_________ days with pay</p>
+                                     <p style={{paddingLeft: '15px', fontSize: '11px', textAlign: 'left'}}>_________ days without pay</p>
+                                     <p style={{paddingLeft: '15px', fontSize: '11px', textAlign: 'left'}}>_________ others (specify)</p>
+                                </div>
+                                 <div style={{width: '50%'}}>
+                                    <strong style={{fontSize: '11px', display: 'block', textAlign: 'left'}}>7(d) DISAPPROVED DUE TO:</strong>
+                                    <p style={{marginTop: '8px', height: '22px'}}>_________________________</p>
+                                </div>
+                            </div>
                             <div style={{marginTop: '20px'}}>
                                 <p style={{fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1px solid black', width: '220px', margin: '0 auto', fontSize: '11px'}}>FRANCISCO ROMEO G. ESCANDOR JR.</p>
                                 <p style={{fontSize: '10px'}}>Officer-in-Charge, BFPC/CFP</p>
@@ -302,5 +295,3 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
         </div>
     );
 }
-
-    
