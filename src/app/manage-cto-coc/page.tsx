@@ -1022,7 +1022,7 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
         return query(collection(firestore, 'app-users'), where('restrictionLevel', 'in', ['System Admin', 'Records Admin']));
     }, [firestore]);
     
-    const { data: adminUsers, isLoading: isLoadingAdmins } = useCollection<AppUser>(adminUsersQuery);
+    const { data: allAdminUsers, isLoading: isLoadingAdmins } = useCollection<AppUser>(adminUsersQuery);
 
     const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
     const { data: employees, isLoading: isLoadingEmployees } = useCollection<Employee>(employeesQuery);
@@ -1041,11 +1041,17 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
         if (isLoading) return 'Loading...';
         return employees?.find(e => e.id === employeeId)?.name || 'Unknown User';
     }
+
+    const validAdminUsers = useMemo(() => {
+        if (!allAdminUsers || !employees) return [];
+        const employeeIds = new Set(employees.map(e => e.id));
+        return allAdminUsers.filter(user => employeeIds.has(user.employeeId));
+    }, [allAdminUsers, employees]);
   
     const onSubmit = async (data: AdminLoginFormValues) => {
-      if (!firestore || !adminUsers) return;
+      if (!firestore || !validAdminUsers) return;
   
-      const selectedUser = adminUsers.find(u => u.docId === data.appUserId);
+      const selectedUser = validAdminUsers.find(u => u.docId === data.appUserId);
       
       if (!selectedUser) {
           toast({
@@ -1123,7 +1129,7 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {adminUsers?.map((user) => (
+                        {validAdminUsers.map((user) => (
                           <SelectItem key={user.docId} value={user.docId}>
                             {getEmployeeName(user.employeeId)}
                           </SelectItem>
