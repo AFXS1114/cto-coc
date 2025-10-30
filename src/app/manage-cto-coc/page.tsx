@@ -449,6 +449,7 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
                             Day: ({ date, ...props }) => {
                                 const dateStr = format(date, 'yyyy-MM-dd');
                                 const count = dateCounts.get(dateStr);
+                                if (!props.buttonProps) return <div className="h-9 w-9"></div>;
                                 return (
                                 <div className="relative">
                                     <div {...props.buttonProps} className={cn(props.buttonProps.className, 'relative')}>
