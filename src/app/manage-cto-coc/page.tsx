@@ -413,12 +413,7 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
           <div className="relative">
             <DayPicker.Day {...props} />
             {count && (
-              <Badge
-                variant="destructive"
-                className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center p-0 text-[10px] pointer-events-none"
-              >
-                {count}
-              </Badge>
+               <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
             )}
           </div>
         );
