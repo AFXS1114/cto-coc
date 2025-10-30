@@ -348,17 +348,6 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
     const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   
-    const dateCounts = useMemo(() => {
-      const counts = new Map<string, number>();
-      if (pendingRequests) {
-        pendingRequests.forEach(req => {
-          const dateStr = format(new Date(req.dateOfFiling), 'yyyy-MM-dd');
-          counts.set(dateStr, (counts.get(dateStr) || 0) + 1);
-        });
-      }
-      return counts;
-    }, [pendingRequests]);
-  
     const filteredRequests = useMemo(() => {
       if (!pendingRequests) return [];
       
@@ -405,19 +394,6 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
         });
       }
     };
-
-    function CustomDay(props: DayProps) {
-        const dateStr = format(props.date, 'yyyy-MM-dd');
-        const count = dateCounts.get(dateStr);
-        return (
-          <div className="relative">
-            <DayPicker.Day {...props} />
-            {count && (
-               <div className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive" />
-            )}
-          </div>
-        );
-      }
   
     return (
       <>
@@ -451,9 +427,6 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
                             selected={selectedDate}
                             onSelect={setSelectedDate}
                             initialFocus
-                            components={{
-                                Day: CustomDay,
-                            }}
                         />
                     </PopoverContent>
                 </Popover>
