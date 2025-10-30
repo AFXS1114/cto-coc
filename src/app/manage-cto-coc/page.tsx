@@ -802,14 +802,14 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
             const employeeWans = filteredWans.filter(wan => wan.name === employee.name && wan.status === 'available');
             const totalHours = employeeWans.reduce((sum, wan) => sum + (wan.totalHours || 0), 0);
             return {
-                id: employee.id,
+                employeeId: employee.id,
                 name: employee.name,
                 totalHours: totalHours
             };
         });
         
         if (searchTerm) {
-            return balances.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.id.includes(searchTerm));
+            return balances.filter(e => e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.employeeId.includes(searchTerm));
         }
 
         return balances;
@@ -875,8 +875,8 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                     </TableHeader>
                     <TableBody>
                         {employeeBalances.map((employee) => (
-                            <TableRow key={employee.id}>
-                                <TableCell>{employee.id}</TableCell>
+                            <TableRow key={employee.employeeId}>
+                                <TableCell>{employee.employeeId}</TableCell>
                                 <TableCell>{employee.name}</TableCell>
                                 <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
                             </TableRow>
