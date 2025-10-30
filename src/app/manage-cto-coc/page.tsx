@@ -94,7 +94,7 @@ interface WanRequest extends DocumentData {
 }
 
 interface AppUser extends DocumentData {
-    id: string;
+    docId: string;
     employeeId: string;
     password?: string;
     restrictionLevel: 'Employee' | 'System Admin' | 'Records Admin';
@@ -1038,14 +1038,14 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
     });
 
     const getEmployeeName = (employeeId: string) => {
-        if (isLoadingEmployees) return 'Loading...';
+        if (isLoading) return 'Loading...';
         return employees?.find(e => e.id === employeeId)?.name || 'Unknown User';
     }
   
     const onSubmit = async (data: AdminLoginFormValues) => {
       if (!firestore || !adminUsers) return;
   
-      const selectedUser = adminUsers.find(u => u.id === data.appUserId);
+      const selectedUser = adminUsers.find(u => u.docId === data.appUserId);
       
       if (!selectedUser) {
           toast({
@@ -1124,7 +1124,7 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
                       </FormControl>
                       <SelectContent>
                         {adminUsers?.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
+                          <SelectItem key={user.docId} value={user.docId}>
                             {getEmployeeName(user.employeeId)}
                           </SelectItem>
                         ))}
@@ -1163,7 +1163,11 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
                 )}
               />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                Login
+                {form.formState.isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                    "Login"
+                )}
               </Button>
             </form>
           </Form>
