@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -67,6 +68,7 @@ import WanPrintForm from '../print-wan/WanPrintForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { DayPicker, DayProps } from 'react-day-picker';
 
 
 interface LeaveRequest extends DocumentData {
@@ -403,6 +405,24 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
         });
       }
     };
+
+    function CustomDay(props: DayProps) {
+        const dateStr = format(props.date, 'yyyy-MM-dd');
+        const count = dateCounts.get(dateStr);
+        return (
+          <div className="relative">
+            <DayPicker.Day {...props} />
+            {count && (
+              <Badge
+                variant="destructive"
+                className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center p-0 text-[10px] pointer-events-none"
+              >
+                {count}
+              </Badge>
+            )}
+          </div>
+        );
+      }
   
     return (
       <>
@@ -416,20 +436,33 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
                 className="pl-10"
                 />
             </div>
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button
-                    variant={'outline'}
-                    className={cn(
-                        'w-full sm:w-[240px] justify-start text-left font-normal',
-                        !selectedDate && 'text-muted-foreground'
-                    )}
-                    >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by date filed</span>}
-                    </Button>
-                </PopoverTrigger>
-                {selectedDate && (
+            <div className="flex items-center">
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                        variant={'outline'}
+                        className={cn(
+                            'w-full sm:w-[240px] justify-start text-left font-normal',
+                            !selectedDate && 'text-muted-foreground'
+                        )}
+                        >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by date filed</span>}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            initialFocus
+                            components={{
+                                Day: CustomDay,
+                            }}
+                        />
+                    </PopoverContent>
+                </Popover>
+                 {selectedDate && (
                     <Button 
                         variant="ghost" 
                         size="icon" 
@@ -439,37 +472,7 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
                         <X className="h-4 w-4" />
                     </Button>
                 )}
-                <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        initialFocus
-                        components={{
-                            Day: ({ date, ...props }) => {
-                                const dateStr = format(date, 'yyyy-MM-dd');
-                                const count = dateCounts.get(dateStr);
-                                if (!props.buttonProps) return <div className="h-9 w-9"></div>;
-                                return (
-                                <div className="relative">
-                                    <div {...props.buttonProps} className={cn(props.buttonProps.className, 'relative')}>
-                                        {props.formattedDate}
-                                    </div>
-                                    {count && (
-                                    <Badge
-                                        variant="destructive"
-                                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center p-0 text-[10px]"
-                                    >
-                                        {count}
-                                    </Badge>
-                                    )}
-                                </div>
-                                );
-                            },
-                        }}
-                    />
-                </PopoverContent>
-            </Popover>
+            </div>
         </div>
 
         {isLoading ? (
