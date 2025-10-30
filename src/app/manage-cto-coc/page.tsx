@@ -49,11 +49,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -64,6 +64,9 @@ import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import LeavePrintForm from '../print-leave/LeavePrintForm';
 import WanPrintForm from '../print-wan/WanPrintForm';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 
 interface LeaveRequest extends DocumentData {
@@ -336,149 +339,228 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
 }
 
 function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingRequests: LeaveRequest[] | null, isLoading: boolean, onPrint: (id: string) => void }) {
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  const [remarks, setRemarks] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
-
-  const filteredRequests = useMemo(() => {
-    if (!pendingRequests) return [];
-    if (!searchTerm) return pendingRequests;
-
-    return pendingRequests.filter(request =>
-      request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.id.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [pendingRequests, searchTerm]);
-
-  const handleCancel = async (request: LeaveRequest) => {
-    if (!firestore) return;
-    
-    try {
-      const newDocRef = doc(firestore, 'cancelled-cto', request.id);
-      await setDoc(newDocRef, { ...request, status: 'Cancelled', remarks });
-
-      const oldDocRef = doc(firestore, 'to-process-leave', request.id);
-      await deleteDoc(oldDocRef);
+    const firestore = useFirestore();
+    const { toast } = useToast();
+    const [remarks, setRemarks] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+    const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  
+    const dateCounts = useMemo(() => {
+      const counts = new Map<string, number>();
+      if (pendingRequests) {
+        pendingRequests.forEach(req => {
+          const dateStr = format(new Date(req.dateOfFiling), 'yyyy-MM-dd');
+          counts.set(dateStr, (counts.get(dateStr) || 0) + 1);
+        });
+      }
+      return counts;
+    }, [pendingRequests]);
+  
+    const filteredRequests = useMemo(() => {
+      if (!pendingRequests) return [];
       
-      toast({
-        title: `Request Cancelled`,
-        description: `The leave request for ${request.name} has been cancelled.`
-      });
-      setRemarks('');
-
-    } catch (error) {
-      console.error('Error cancelling leave status:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to cancel leave request.'
-      });
-    }
-  };
-
-  return (
-    <>
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input
-          placeholder="Search by name or leave code..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-      {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+      let filtered = pendingRequests;
+  
+      if (searchTerm) {
+        filtered = filtered.filter(request =>
+          request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          request.id.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+  
+      if (selectedDate) {
+        filtered = filtered.filter(request =>
+          isSameDay(new Date(request.dateOfFiling), selectedDate)
+        );
+      }
+  
+      return filtered;
+    }, [pendingRequests, searchTerm, selectedDate]);
+  
+    const handleCancel = async (request: LeaveRequest) => {
+      if (!firestore) return;
+      
+      try {
+        const newDocRef = doc(firestore, 'cancelled-cto', request.id);
+        await setDoc(newDocRef, { ...request, status: 'Cancelled', remarks });
+  
+        const oldDocRef = doc(firestore, 'to-process-leave', request.id);
+        await deleteDoc(oldDocRef);
+        
+        toast({
+          title: `Request Cancelled`,
+          description: `The leave request for ${request.name} has been cancelled.`
+        });
+        setRemarks('');
+  
+      } catch (error) {
+        console.error('Error cancelling leave status:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to cancel leave request.'
+        });
+      }
+    };
+  
+    return (
+      <>
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <div className="relative flex-grow">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                placeholder="Search by name or leave code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                />
+            </div>
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button
+                    variant={'outline'}
+                    className={cn(
+                        'w-full sm:w-[240px] justify-start text-left font-normal',
+                        !selectedDate && 'text-muted-foreground'
+                    )}
+                    >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by date filed</span>}
+                    </Button>
+                </PopoverTrigger>
+                {selectedDate && (
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-9 w-9 ml-1"
+                        onClick={() => setSelectedDate(undefined)}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
+                <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        initialFocus
+                        components={{
+                            Day: ({ date, ...props }) => {
+                                const dateStr = format(date, 'yyyy-MM-dd');
+                                const count = dateCounts.get(dateStr);
+                                return (
+                                <div className="relative">
+                                    <div {...props.buttonProps} className={cn(props.buttonProps.className, 'relative')}>
+                                        {props.formattedDate}
+                                    </div>
+                                    {count && (
+                                    <Badge
+                                        variant="destructive"
+                                        className="absolute -top-1 -right-1 h-4 w-4 rounded-full flex items-center justify-center p-0 text-[10px]"
+                                    >
+                                        {count}
+                                    </Badge>
+                                    )}
+                                </div>
+                                );
+                            },
+                        }}
+                    />
+                </PopoverContent>
+            </Popover>
         </div>
-      ) : filteredRequests.length === 0 ? (
-        <p className="text-center text-muted-foreground py-4">
-          {pendingRequests && pendingRequests.length > 0 ? 'No matching requests found.' : 'No pending requests to manage.'}
-        </p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Leave Code</TableHead>
-              <TableHead>Employee Name</TableHead>
-              <TableHead>Date Filed</TableHead>
-              <TableHead>No. of Days</TableHead>
-              <TableHead>Inclusive Dates</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRequests.map((request) => (
-              <TableRow key={request.id}>
-                <TableCell className="font-mono">{request.id}</TableCell>
-                <TableCell>{request.name}</TableCell>
-                <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
-                <TableCell>{request.daysApplied}</TableCell>
-                <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
-                <TableCell className="text-right space-x-1">
-                  
-                  <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
-                    <CheckCircle className="h-5 w-5" />
-                  </Button>
-                  
-                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
-                    <Printer className="h-5 w-5" />
-                  </Button>
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
-                        <XCircle className="h-5 w-5" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel Leave Request?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will cancel the leave request for {request.name}. Please provide a reason for the cancellation.
-                        </AlertDialogDescription>
-                        <div className="grid gap-2 pt-2">
-                            <Label htmlFor="remarks">Remarks</Label>
-                            <Textarea 
-                                id="remarks" 
-                                placeholder="Enter cancellation reason..." 
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                            />
-                        </div>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleCancel(request)} disabled={!remarks}>
-                          Confirm Cancel
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : filteredRequests.length === 0 ? (
+          <p className="text-center text-muted-foreground py-4">
+            {pendingRequests && pendingRequests.length > 0 ? 'No matching requests found.' : 'No pending requests to manage.'}
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Leave Code</TableHead>
+                <TableHead>Employee Name</TableHead>
+                <TableHead>Date Filed</TableHead>
+                <TableHead>No. of Days</TableHead>
+                <TableHead>Inclusive Dates</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-       {selectedRequest && (
-        <AttachWansDialog
-          open={!!selectedRequest}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setSelectedRequest(null);
-            }
-          }}
-          request={selectedRequest}
-        />
-      )}
-    </>
-  );
-}
+            </TableHeader>
+            <TableBody>
+              {filteredRequests.map((request) => (
+                <TableRow key={request.id}>
+                  <TableCell className="font-mono">{request.id}</TableCell>
+                  <TableCell>{request.name}</TableCell>
+                  <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{request.daysApplied}</TableCell>
+                  <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
+                  <TableCell className="text-right space-x-1">
+                    
+                    <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
+                      <CheckCircle className="h-5 w-5" />
+                    </Button>
+                    
+                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                      <Printer className="h-5 w-5" />
+                    </Button>
+  
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
+                          <XCircle className="h-5 w-5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel Leave Request?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will cancel the leave request for {request.name}. Please provide a reason for the cancellation.
+                          </AlertDialogDescription>
+                          <div className="grid gap-2 pt-2">
+                              <Label htmlFor="remarks">Remarks</Label>
+                              <Textarea 
+                                  id="remarks" 
+                                  placeholder="Enter cancellation reason..." 
+                                  value={remarks}
+                                  onChange={(e) => setRemarks(e.target.value)}
+                              />
+                          </div>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleCancel(request)} disabled={!remarks}>
+                            Confirm Cancel
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+         {selectedRequest && (
+          <AttachWansDialog
+            open={!!selectedRequest}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) {
+                setSelectedRequest(null);
+              }
+            }}
+            request={selectedRequest}
+          />
+        )}
+      </>
+    );
+  }
 
 function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { wanRequests: WanRequest[] | null, isLoading: boolean, onRejectSuccess: () => void, onPrint: (id: string) => void }) {
   const firestore = useFirestore();
