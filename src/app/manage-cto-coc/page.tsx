@@ -68,7 +68,7 @@ import WanPrintForm from '../print-wan/WanPrintForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { DayPicker, DayProps } from 'react-day-picker';
+import { DayPicker, DayProps, useDayRender } from 'react-day-picker';
 
 
 interface LeaveRequest extends DocumentData {
@@ -1038,6 +1038,7 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
     });
 
     const getEmployeeName = (employeeId: string) => {
+        if (isLoadingEmployees) return 'Loading...';
         return employees?.find(e => e.id === employeeId)?.name || 'Unknown User';
     }
   
