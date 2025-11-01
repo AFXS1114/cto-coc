@@ -15,6 +15,14 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+  } from '@/components/ui/dialog';
+import {
   Form,
   FormControl,
   FormField,
@@ -31,9 +39,9 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, DocumentData } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, DocumentData } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -54,6 +62,7 @@ interface Employee {
 }
 
 interface AppUser extends DocumentData {
+    docId: string;
     employeeId: string;
     password?: string;
 }
@@ -81,6 +90,18 @@ const loginSchema = z.object({
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+
+const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, 'Current password is required.'),
+    newPassword: z.string().min(6, 'New password must be at least 6 characters.'),
+    confirmPassword: z.string(),
+}).refine(data => data.newPassword === data.confirmPassword, {
+    message: "Passwords don't match.",
+    path: ['confirmPassword'],
+});
+
+type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
+
 
 function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee) => void }) {
   const { toast } = useToast();
@@ -126,7 +147,7 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
         }
 
         const appUserDoc = querySnapshot.docs[0];
-        const appUserData = appUserDoc.data() as AppUser;
+        const appUserData = { ...appUserDoc.data(), docId: appUserDoc.id } as AppUser;
         
         if (appUserData.password === data.password) {
             toast({
@@ -134,6 +155,7 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
                 description: `Welcome, ${selectedEmployee.name}!`,
             });
             sessionStorage.setItem('loggedInEmployee', JSON.stringify(selectedEmployee));
+            sessionStorage.setItem('appUserDocId', appUserDoc.id);
             onLoginSuccess(selectedEmployee);
         } else {
             toast({
@@ -241,16 +263,25 @@ function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee)
 
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string) => {
     if (typeof dates === 'string') {
-        return format(new Date(dates), 'MMM d, yyyy');
+        try {
+            return format(new Date(dates), 'MMM d, yyyy');
+        } catch(e) { return dates; }
     }
     if (Array.isArray(dates)) {
-        return dates.map(d => format(new Date(d), 'MMM d, yyyy')).join(', ');
+        return dates.map(d => {
+            try { return format(new Date(d), 'MMM d, yyyy') }
+            catch(e) { return d; }
+        }).join(', ');
     }
     if (typeof dates === 'object' && dates.from) {
         if (dates.to) {
-            return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
+            try {
+                return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
+            } catch(e) { return `${dates.from} - ${dates.to}`; }
         }
-        return format(new Date(dates.from), 'MMM d, yyyy');
+        try {
+            return format(new Date(dates.from), 'MMM d, yyyy');
+        } catch(e) { return dates.from; }
     }
     return 'N/A';
 };
@@ -416,9 +447,151 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
     );
   }
 
+function ChangePasswordDialog({ open, onOpenChange, appUserDocId }: { open: boolean, onOpenChange: (open: boolean) => void, appUserDocId: string | null }) {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+    const form = useForm<ChangePasswordFormValues>({
+        resolver: zodResolver(changePasswordSchema),
+        defaultValues: {
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: '',
+        },
+    });
+
+    const handleClose = () => {
+        form.reset();
+        onOpenChange(false);
+    }
+
+    const onSubmit = async (data: ChangePasswordFormValues) => {
+        if (!firestore || !appUserDocId) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not update password. Please try again.' });
+            return;
+        }
+
+        try {
+            const appUserRef = doc(firestore, 'app-users', appUserDocId);
+            const appUserSnap = await getDocs(query(collection(firestore, 'app-users'), where('__name__', '==', appUserDocId)));
+
+            if (appUserSnap.empty) {
+                toast({ variant: 'destructive', title: 'Error', description: 'User not found.' });
+                return;
+            }
+
+            const appUser = appUserSnap.docs[0].data();
+
+            if (appUser.password !== data.currentPassword) {
+                form.setError('currentPassword', { type: 'manual', message: 'Incorrect current password.' });
+                return;
+            }
+
+            await updateDoc(appUserRef, { password: data.newPassword });
+
+            toast({ title: 'Success', description: 'Your password has been changed successfully.' });
+            handleClose();
+
+        } catch (error) {
+            console.error("Error changing password:", error);
+            toast({ variant: 'destructive', title: 'Error', description: 'An unexpected error occurred.' });
+        }
+    };
+
+
+    return (
+        <Dialog open={open} onOpenChange={handleClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Change Password</DialogTitle>
+                    <DialogDescription>
+                        Enter your current password and a new password below.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                        <FormField
+                            control={form.control}
+                            name="currentPassword"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Current Password</FormLabel>
+                                    <FormControl>
+                                        <div className="relative">
+                                            <Input type={showCurrentPassword ? 'text' : 'password'} {...field} />
+                                            <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-full" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>
+                                                {showCurrentPassword ? <EyeOff /> : <Eye />}
+                                            </Button>
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="newPassword"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>New Password</FormLabel>
+                                    <FormControl>
+                                        <div className="relative">
+                                            <Input type={showNewPassword ? 'text' : 'password'} {...field} />
+                                            <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-full" onClick={() => setShowNewPassword(!showNewPassword)}>
+                                                {showNewPassword ? <EyeOff /> : <Eye />}
+                                            </Button>
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="confirmPassword"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Confirm New Password</FormLabel>
+                                    <FormControl>
+                                        <div className="relative">
+                                            <Input type={showConfirmPassword ? 'text' : 'password'} {...field} />
+                                            <Button type="button" variant="ghost" size="icon" className="absolute inset-y-0 right-0 h-full" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                                                {showConfirmPassword ? <EyeOff /> : <Eye />}
+                                            </Button>
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                         <DialogFooter>
+                            <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Change Password
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
+    const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+    const [appUserDocId, setAppUserDocId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const id = sessionStorage.getItem('appUserDocId');
+        setAppUserDocId(id);
+    }, []);
+
     return (
+        <>
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -453,7 +626,12 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                         </div>
                     </div>
 
-                    <Tabs defaultValue="my-leave-records" className="w-full">
+                     <Button variant="outline" onClick={() => setChangePasswordOpen(true)} className="w-full sm:w-auto">
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        Change Password
+                    </Button>
+
+                    <Tabs defaultValue="my-leave-records" className="w-full pt-4">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="my-leave-records">My Leave Records</TabsTrigger>
                             <TabsTrigger value="my-wancoc-records">My WAN/COC Records</TabsTrigger>
@@ -474,6 +652,12 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                 </Button>
             </CardContent>
         </Card>
+        <ChangePasswordDialog
+            open={changePasswordOpen}
+            onOpenChange={setChangePasswordOpen}
+            appUserDocId={appUserDocId}
+        />
+        </>
     )
 }
 
@@ -484,6 +668,7 @@ export default function ProfilePage() {
 
   const handleLogout = () => {
       sessionStorage.removeItem('loggedInEmployee');
+      sessionStorage.removeItem('appUserDocId');
       setLoggedInEmployee(null);
   }
 
@@ -491,7 +676,12 @@ export default function ProfilePage() {
     setIsClient(true);
     const employeeData = sessionStorage.getItem('loggedInEmployee');
     if (employeeData) {
-      setLoggedInEmployee(JSON.parse(employeeData));
+      try {
+        setLoggedInEmployee(JSON.parse(employeeData));
+      } catch (e) {
+          console.error("Failed to parse employee data from session storage", e);
+          handleLogout();
+      }
     }
   }, []);
 
@@ -519,4 +709,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
