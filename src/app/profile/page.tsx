@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -610,7 +609,7 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                             <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
                             <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
                         </div>
-                         <div className="flex flex-col sm:flex-row gap-4">
+                         <div className="flex flex-col gap-4">
                             <Button asChild className="w-full">
                                 <Link href="/leave-cto">
                                     <FileText className="mr-2 h-4 w-4" />
@@ -623,13 +622,12 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                                     File WAN/COC
                                 </Link>
                             </Button>
+                             <Button variant="outline" onClick={() => setChangePasswordOpen(true)} className="w-full">
+                                <KeyRound className="mr-2 h-4 w-4" />
+                                Change Password
+                            </Button>
                         </div>
                     </div>
-
-                     <Button variant="outline" onClick={() => setChangePasswordOpen(true)} className="w-full sm:w-auto">
-                        <KeyRound className="mr-2 h-4 w-4" />
-                        Change Password
-                    </Button>
 
                     <Tabs defaultValue="my-leave-records" className="w-full pt-4">
                         <TabsList className="grid w-full grid-cols-2">
