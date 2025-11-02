@@ -74,7 +74,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Apply for Wide Area Network access or submit a Change of Custody form for equipment and assets.
+                  Didi tabi ma file san WAN
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to form <ArrowRight className="ml-2 h-4 w-4" />
