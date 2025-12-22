@@ -65,11 +65,11 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
         if (!times || times.length === 0) return 'N/A';
         return times.map(time => {
              try {
-                const from = format(new Date(`1970-01-01T${time.from}`), 'h aa');
-                const to = format(new Date(`1970-01-01T${time.to}`), 'h aa');
-                return `${from} / ${to}`;
+                const from = format(new Date(`1970-01-01T${time.from}`),'h aa');
+                const to = format(new Date(`1970-01-01T${time.to}`),'h aa');
+                return `${from} - ${to}`;
              } catch {
-                return `${time.from} / ${time.to}`;
+                return `${time.from} - ${time.to}`;
              }
         }).join(', ');
     }
@@ -87,7 +87,7 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
     }
 
     return (
-        <div className="p-8 font-serif text-black">
+        <div className="p-8 font-serif-print text-black">
             <header className="text-center space-y-2 mb-4">
                 <h1 className="font-bold text-lg">PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</h1>
                 <h2 className="font-bold text-xl">WORK ASSIGNMENT NOTICE</h2>
@@ -101,22 +101,22 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
                 In the extingency of the sevice, the following employee is hereby instructed to report for work on the date and time specified before:
             </p>
 
-            <table className="w-full border-collapse border border-black text-sm mb-4">
+            <table className="w-full font-serif-print border-collapse border border-black text-sm mb-4">
                 <tbody>
                     <tr className="bg-yellow-300">
-                        <td className="border border-black p-2 w-1/2">Name of Employee: <br/><strong className="font-sans text-base">{wanData.name}</strong></td>
-                        <td className="border border-black p-2 w-1/2">Unit/Division: <br/><strong className="font-sans text-base">{wanData.unitDivision}</strong></td>
+                        <td className="border border-black p-2 w-1/2">Name of Employee: <br/><strong className="font-serif-print text-base">{wanData.name}</strong></td>
+                        <td className="border border-black p-2 w-1/2">Unit/Division: <br/><strong className="font-serif-print text-base">{wanData.unitDivision}</strong></td>
                     </tr>
                     <tr className="bg-yellow-300">
-                        <td className="border border-black p-2">Date/Day: <br/><strong className="font-sans text-base">{format(new Date(wanData.dateOfWan), 'EEEE, MMMM d, yy')}</strong></td>
-                        <td className="border border-black p-2">Inclusive Period/Time: <br/><strong className="font-sans text-base">{formatInclusiveTime(wanData.inclusiveTimes)}</strong></td>
+                        <td className="border border-black p-2">Date/Day: <br/><strong className="font-serif-print text-base">{format(new Date(wanData.dateOfWan), 'MMMM d, yyyy')}</strong></td>
+                        <td className="border border-black p-2">Inclusive Period/Time: <br/><strong className="font-serif-print text-base">{formatInclusiveTime(wanData.inclusiveTimes)}</strong></td>
                     </tr>
                 </tbody>
             </table>
 
             <div className="mb-4">
                 <p className="text-sm">Nature of Work Assignment/Overtime:</p>
-                <div className="border-b border-black mt-2 pb-1 font-sans text-base">
+                <div className="border-b border-black mt-2 pb-1 font-serif-print text-base">
                     {wanData.tasks.map(task => task.value).join(', ')}
                 </div>
             </div>

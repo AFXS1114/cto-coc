@@ -38,7 +38,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Access your profile, view leave records, and manage your account details securely.
+                  Pwede mo didi maimod an CTO & COC nan WAN Balance mo, 123456 and default password.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to profile <ArrowRight className="ml-2 h-4 w-4" />
@@ -56,7 +56,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Submit and manage your leave requests or compensatory time off applications with our streamlined form.
+                  Didi tabi ma file CTO or Leave.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to form <ArrowRight className="ml-2 h-4 w-4" />
@@ -92,7 +92,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  View and manage your submitted Compensatory Time Off and Change of Custody requests.
+                  Didi tabi maiimod ang mga in file san CTO nan COC, Records Admin lang tabi an pwede mag gamit sadi.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to page <ArrowRight className="ml-2 h-4 w-4" />
@@ -105,12 +105,12 @@ export default function Home() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-3 text-xl font-headline">
                   <Settings className="h-7 w-7 text-primary" />
-                  Settings
+                  ..\
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <CardDescription>
-                  Access and configure application settings and preferences.
+                  Para man ini sa 8080.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to page <ArrowRight className="ml-2 h-4 w-4" />
