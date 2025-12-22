@@ -116,9 +116,11 @@ export default function WanPrintForm({ wanId }: { wanId: string }) {
 
             <div className="mb-4">
                 <p className="text-sm">Nature of Work Assignment/Overtime:</p>
-                <div className="border-b border-black mt-2 pb-1 font-serif-print text-base text-center">
+                <div className="mt-2 font-serif-print text-base text-center">
                     {wanData.tasks.map((task, index) => (
-                        <div key={index}>{task.value}</div>
+                        <div key={index} className="border-b border-black mt-2 pb-1">
+                            {task.value}
+                        </div>
                     ))}
                 </div>
             </div>
