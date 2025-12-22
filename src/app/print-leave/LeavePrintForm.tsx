@@ -130,7 +130,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                 <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
                 <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
                 <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
-                <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fishport Complex</p>
+                <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
                 <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
             </div>
             
@@ -225,7 +225,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                             <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(d) COMMUTATION</div>
                             <div style={{paddingTop: '8px', paddingLeft: '15px', textAlign: 'left'}}>
                                 <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px'}}></span>Requested<br/>
-                                <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px', background: 'black'}}></span>Not Requested
+                                <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px', background: 'white'}}></span>Not Requested
                             </div>
                             <div style={{marginTop: '30px', borderTop: '1px solid black', paddingTop: '2px', margin: '30px 40px 0'}}>
                                 <p style={{fontSize: '10px'}}>Signature of Applicant</p>
@@ -295,7 +295,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                             </div>
                             <div style={{marginTop: '20px'}}>
                                 <p style={{fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1px solid black', width: '220px', margin: '0 auto', fontSize: '11px'}}>FRANCISCO ROMEO G. ESCANDOR JR.</p>
-                                <p style={{fontSize: '10px'}}>Officer-in-Charge, BFPC/CFP</p>
+                                <p style={{fontSize: '10px'}}>OIC/Port Manager, BFPC/CFP</p>
                                 <p style={{fontSize: '10px'}}>Authorized Approving Officer</p>
                             </div>
                         </td>

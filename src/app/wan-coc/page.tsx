@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from 'next/link';
@@ -49,6 +48,7 @@ import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Employee {
     id: string;
@@ -86,7 +86,8 @@ const wanCocFormSchema = z.object({
     to: z.string().min(1, 'End time is required.'),
   })).min(1, 'At least one time range is required.'),
   tasks: z.array(z.object({
-      value: z.string().min(1, "Please select a task.")
+      type: z.enum(['select', 'custom']),
+      value: z.string().min(1, "Please provide a task description.")
   })).min(1, "At least one task is required."),
   totalHours: z.number(),
   status: z.string().default('available'),
@@ -205,7 +206,7 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       dateOfWan: new Date(),
       unitDivision: 'BULAN FISH PORT COMPLEX',
       inclusiveTimes: [{ from: '', to: '' }],
-      tasks: [{ value: taskOptions[0]}],
+      tasks: [{ type: 'select', value: taskOptions[0]}],
       totalHours: 0,
       status: 'available',
     },
@@ -220,6 +221,8 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
       control: form.control,
       name: "tasks",
   });
+  
+  const tasks = useWatch({ control: form.control, name: 'tasks' });
 
   const inclusiveTimes = useWatch({
     control: form.control,
@@ -289,6 +292,8 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
         id: data.wanCode,
         ...data,
         dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
+        // We only need the value for the database
+        tasks: data.tasks.map(task => ({ value: task.value })),
     };
 
     const docRef = doc(firestore, 'filed-wan', submissionData.id);
@@ -462,35 +467,84 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                 <FormLabel>Nature of Work Assignment/Overtime:</FormLabel>
                  <div className="space-y-4 pt-2">
                      {taskFields.map((item, index) => (
-                         <div key={item.id} className="flex items-center gap-2">
-                             <FormField
+                         <div key={item.id} className="flex items-start gap-4 border p-4 rounded-md">
+                            <FormField
                                 control={form.control}
-                                name={`tasks.${index}.value`}
+                                name={`tasks.${index}.type`}
                                 render={({ field }) => (
-                                    <FormItem className="flex-1">
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormItem className="space-y-3">
                                         <FormControl>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select a task/activity" />
-                                        </SelectTrigger>
+                                            <RadioGroup
+                                            onValueChange={(value) => {
+                                                field.onChange(value);
+                                                // Reset value when switching
+                                                form.setValue(`tasks.${index}.value`, '');
+                                            }}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-1"
+                                            >
+                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                    <FormControl>
+                                                        <RadioGroupItem value="select" />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal">Select</FormLabel>
+                                                </FormItem>
+                                                <FormItem className="flex items-center space-x-3 space-y-0">
+                                                    <FormControl>
+                                                        <RadioGroupItem value="custom" />
+                                                    </FormControl>
+                                                    <FormLabel className="font-normal">Custom</FormLabel>
+                                                </FormItem>
+                                            </RadioGroup>
                                         </FormControl>
-                                        <SelectContent>
-                                        {taskOptions.map(option => (
-                                            <SelectItem key={option} value={option}>{option}</SelectItem>
-                                        ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <FormMessage />
                                     </FormItem>
                                 )}
-                                />
-                                <Button
+                            />
+                            <div className="flex-1">
+                                {tasks[index]?.type === 'select' ? (
+                                    <FormField
+                                        control={form.control}
+                                        name={`tasks.${index}.value`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select a task/activity" />
+                                                        </SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        {taskOptions.map(option => (
+                                                            <SelectItem key={option} value={option}>{option}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                ) : (
+                                    <FormField
+                                        control={form.control}
+                                        name={`tasks.${index}.value`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <Input placeholder="Enter custom task description" {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                )}
+                            </div>
+                            <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => removeTask(index)}
                                 disabled={taskFields.length <= 1}
-                                className="text-destructive hover:text-destructive"
+                                className="text-destructive hover:text-destructive self-center"
                             >
                                 <Trash2 className="h-4 w-4" />
                             </Button>
@@ -502,7 +556,7 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                     variant="outline"
                     size="sm"
                     className="mt-2"
-                    onClick={() => appendTask({ value: '' })}
+                    onClick={() => appendTask({ type: 'select', value: '' })}
                     >
                     <Plus className="mr-2 h-4 w-4" /> Add Activity
                 </Button>
@@ -533,5 +587,3 @@ export default function WanCocPage() {
     </div>
   );
 }
-
-    
