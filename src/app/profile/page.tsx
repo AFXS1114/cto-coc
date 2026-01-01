@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import {
     DialogTitle,
     DialogDescription,
     DialogFooter,
-  } from '@/components/ui/dialog';
+} from '@/components/ui/dialog';
 import {
   Form,
   FormControl,
@@ -38,9 +38,9 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound, Printer, Pencil, Plus, Trash2, Clock } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs, doc, updateDoc, DocumentData } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, DocumentData, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -51,8 +51,13 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
 
 interface Employee {
   id: string;
@@ -81,6 +86,9 @@ interface WanRecord extends DocumentData {
   totalHours: number;
   status: 'available' | 'used' | 'rejected';
   remarks?: string;
+  inclusiveTimes: { from: string; to: string }[];
+  tasks: { value: string }[];
+  unitDivision: string;
 }
 
 const loginSchema = z.object({
@@ -100,6 +108,45 @@ const changePasswordSchema = z.object({
 });
 
 type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
+
+const taskOptions = [
+    'Monitor/tally the volume of fish unloading by fishing vessels and overland vehicles;',
+    'Record the arrival and departure of fishing/non-fishing vessels;',
+    'Issue berthing, wharfage, fish unloading and other transactions stubs;',
+    'Prepare reports for statistical purposes;',
+    'Secure berthing space for alighting boats per unloading of fishes;',
+    'Serve monthly billing to Port Clients;',
+    'Act as toll gate keeper;',
+    'Prepare and issue PTCB certificates, Food Pass and isDA on the Go Passes (Permit to travel for Fish Brokers/Viajeros/Drivers/Labor bound to NCR and nearby provinces);',
+    'Maintenance and troubleshooting of desktops, personal computers, laptop, printers and other IT equipment of BFPC;',
+    'Preparation of ID for Port Clients;',
+    'Convey the Officer-in-Charge, BFPC personnel, PFDA Officials and Staff, and BFPC Guest on official business in BFPC vicinity and nearby municipalities;',
+    'Handle and assess initial application and registration forms for port facilities and issuance of ID for port clients;',
+    'Conduct contact tracing to Port Clients;',
+    'Monitor and maintain BFPC Electrical Systems;',
+    'Assists in any tasks ordered by the Port Manager and other related concerns;',
+    'Prepare monthly billing for Monthly rentals;',
+    'Prepare daily Unloading and Berthing slip;',
+];
+
+const editWanFormSchema = z.object({
+  wanCode: z.string(),
+  name: z.string(),
+  dateOfWan: z.date(),
+  unitDivision: z.string(),
+  inclusiveTimes: z.array(z.object({
+    from: z.string().min(1, 'Start time is required.'),
+    to: z.string().min(1, 'End time is required.'),
+  })).min(1, 'At least one time range is required.'),
+  tasks: z.array(z.object({
+      type: z.enum(['select', 'custom']),
+      value: z.string().min(1, "Please provide a task description.")
+  })).min(1, "At least one task is required."),
+  totalHours: z.number(),
+  status: z.string(),
+});
+
+type EditWanFormValues = z.infer<typeof editWanFormSchema>;
 
 
 function ProfileLogin({ onLoginSuccess }: { onLoginSuccess: (employee: Employee) => void }) {
@@ -364,29 +411,275 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
   );
 }
 
+function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanRecord | null, open: boolean, onOpenChange: (open: boolean) => void, onUpdateSuccess: () => void }) {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    const [totalHours, setTotalHours] = useState(0);
+
+    const form = useForm<EditWanFormValues>({
+        resolver: zodResolver(editWanFormSchema),
+    });
+
+    const { fields: timeFields, append: appendTime, remove: removeTime } = useFieldArray({
+        control: form.control,
+        name: 'inclusiveTimes',
+    });
+
+    const { fields: taskFields, append: appendTask, remove: removeTask } = useFieldArray({
+        control: form.control,
+        name: "tasks",
+    });
+
+    const inclusiveTimes = useWatch({ control: form.control, name: 'inclusiveTimes' });
+    const tasks = useWatch({ control: form.control, name: 'tasks' });
+
+    useEffect(() => {
+        if (wan) {
+            form.reset({
+                ...wan,
+                dateOfWan: new Date(wan.dateOfWan),
+                // transform tasks for the form
+                tasks: wan.tasks.map(task => {
+                    const isPredefined = taskOptions.includes(task.value);
+                    return {
+                        type: isPredefined ? 'select' : 'custom',
+                        value: task.value
+                    }
+                })
+            });
+        }
+    }, [wan, form]);
+
+    useEffect(() => {
+        if (!inclusiveTimes) return;
+        let totalMinutes = 0;
+        const today = new Date();
+        today.setSeconds(0);
+        today.setMilliseconds(0);
+
+        const lunchStart = new Date(today);
+        lunchStart.setHours(12, 0, 0, 0);
+
+        const lunchEnd = new Date(today);
+        lunchEnd.setHours(13, 0, 0, 0);
+
+        inclusiveTimes.forEach(timeRange => {
+            if (timeRange.from && timeRange.to) {
+                let startTime = parse(timeRange.from, 'HH:mm', new Date());
+                let endTime = parse(timeRange.to, 'HH:mm', new Date());
+
+                if (endTime < startTime) {
+                    endTime.setDate(endTime.getDate() + 1);
+                }
+
+                let duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+
+                const rangeStart = startTime.getTime();
+                const rangeEnd = endTime.getTime();
+                const lunchStartTime = lunchStart.getTime();
+                const lunchEndTime = lunchEnd.getTime();
+                
+                if (rangeStart < lunchStartTime && rangeEnd > lunchEndTime) {
+                    duration -= 60;
+                }
+                
+                totalMinutes += duration;
+            }
+        });
+        const newTotalHours = Math.max(0, totalMinutes / 60);
+        setTotalHours(newTotalHours);
+        form.setValue('totalHours', newTotalHours);
+    }, [inclusiveTimes, form]);
+
+    const onSubmit = async (data: EditWanFormValues) => {
+        if (!firestore || !wan) return;
+        
+        const submissionData = {
+            ...data,
+            dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
+            tasks: data.tasks.map(task => ({ value: task.value })),
+        };
+        
+        const docRef = doc(firestore, 'filed-wan', wan.id);
+        
+        try {
+            await setDoc(docRef, submissionData);
+            toast({
+                title: 'WAN Updated Successfully!',
+                description: `Your WAN request (${wan.id}) has been updated.`,
+            });
+            onUpdateSuccess();
+            onOpenChange(false);
+        } catch(error) {
+             toast({
+                variant: 'destructive',
+                title: 'Update Failed',
+                description: 'Could not update the WAN record.',
+            });
+        }
+    };
+
+    if (!wan) return null;
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Edit WAN Record ({wan.id})</DialogTitle>
+                    <DialogDescription>
+                        Modify the details of your Work Assignment Notice.
+                    </DialogDescription>
+                </DialogHeader>
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto pr-6">
+                        <FormField
+                            control={form.control}
+                            name="dateOfWan"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Date of WAN</FormLabel>
+                                <Popover>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                    <Button
+                                        variant={'outline'}
+                                        className={cn('w-full text-left font-normal',!field.value && 'text-muted-foreground')}
+                                    >
+                                        {field.value ? (format(field.value, 'PPP')) : (<span>Pick a date</span>)}
+                                    </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={field.onChange}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+
+                        <div className='space-y-2'>
+                            <div className="flex justify-between items-center">
+                                <FormLabel>Inclusive Time</FormLabel>
+                                <div className="flex items-center gap-2 text-sm font-medium">
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <span>Total Hours: {totalHours.toFixed(2)}</span>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                            {timeFields.map((item, index) => (
+                                <div key={item.id} className="flex items-center gap-2">
+                                    <FormField control={form.control} name={`inclusiveTimes.${index}.from`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <span>-</span>
+                                    <FormField control={form.control} name={`inclusiveTimes.${index}.to`} render={({ field }) => (<FormItem className="flex-1"><FormControl><Input type="time" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                    <Button type="button" variant="ghost" size="icon" onClick={() => removeTime(index)} disabled={timeFields.length <= 1} className="text-destructive hover:text-destructive">
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTime({ from: '', to: '' })}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Time
+                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <FormLabel>Nature of Work Assignment/Overtime:</FormLabel>
+                            <div className="space-y-2">
+                                {taskFields.map((item, index) => (
+                                    <div key={item.id} className="flex items-start gap-4 border p-3 rounded-md">
+                                        <FormField
+                                            control={form.control}
+                                            name={`tasks.${index}.type`}
+                                            render={({ field }) => (
+                                                <FormItem className="space-y-3"><FormControl>
+                                                    <RadioGroup onValueChange={(value) => { field.onChange(value); form.setValue(`tasks.${index}.value`, ''); }} defaultValue={field.value} className="flex flex-col space-y-1">
+                                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="select" /></FormControl><FormLabel className="font-normal">Select</FormLabel></FormItem>
+                                                        <FormItem className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value="custom" /></FormControl><FormLabel className="font-normal">Custom</FormLabel></FormItem>
+                                                    </RadioGroup>
+                                                </FormControl></FormItem>
+                                            )}
+                                        />
+                                        <div className="flex-1">
+                                            {tasks[index]?.type === 'select' ? (
+                                                <FormField control={form.control} name={`tasks.${index}.value`} render={({ field }) => (<FormItem>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="Select a task/activity" /></SelectTrigger></FormControl>
+                                                        <SelectContent>{taskOptions.map(option => (<SelectItem key={option} value={option}>{option}</SelectItem>))}</SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>)}
+                                            />
+                                            ) : (
+                                                <FormField control={form.control} name={`tasks.${index}.value`} render={({ field }) => (<FormItem><FormControl><Input placeholder="Enter custom task description" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                            )}
+                                        </div>
+                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeTask(index)} disabled={taskFields.length <= 1} className="text-destructive hover:text-destructive self-center">
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => appendTask({ type: 'select', value: '' })}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Activity
+                            </Button>
+                        </div>
+
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Save Changes
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 function WanRecordsTable({ employee }: { employee: Employee }) {
     const firestore = useFirestore();
-  
+    const [selectedWan, setSelectedWan] = useState<WanRecord | null>(null);
+    const [isEditWanOpen, setIsEditWanOpen] = useState(false);
+    const [dataVersion, setDataVersion] = useState(0);
+
     const filedWanQuery = useMemoFirebase(() => {
       if (!firestore || !employee) return null;
       return query(collection(firestore, 'filed-wan'), where('name', '==', employee.name));
-    }, [firestore, employee]);
+    }, [firestore, employee, dataVersion]);
   
     const usedWanQuery = useMemoFirebase(() => {
       if (!firestore || !employee) return null;
       return query(collection(firestore, 'used-wan'), where('name', '==', employee.name));
-    }, [firestore, employee]);
+    }, [firestore, employee, dataVersion]);
 
     const rejectedWanQuery = useMemoFirebase(() => {
       if (!firestore || !employee) return null;
       return query(collection(firestore, 'rejected-wan'), where('name', '==', employee.name));
-    }, [firestore, employee]);
+    }, [firestore, employee, dataVersion]);
   
     const { data: filedWans, isLoading: filedLoading } = useCollection<WanRecord>(filedWanQuery);
     const { data: usedWans, isLoading: usedLoading } = useCollection<WanRecord>(usedWanQuery);
     const { data: rejectedWans, isLoading: rejectedLoading } = useCollection<WanRecord>(rejectedWanQuery);
   
     const isLoading = filedLoading || usedLoading || rejectedLoading;
+
+    const handleEdit = (wan: WanRecord) => {
+        setSelectedWan(wan);
+        setIsEditWanOpen(true);
+    };
+
+    const handlePrint = (wanId: string) => {
+        window.open(`/print-wan?id=${wanId}`, '_blank');
+    };
   
     const allRecords = useMemo(() => {
       if (!filedWans && !usedWans && !rejectedWans) return [];
@@ -413,36 +706,65 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
     }
   
     return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>WAN Code</TableHead>
-            <TableHead>Date of WAN</TableHead>
-            <TableHead>Remarks</TableHead>
-            <TableHead className="text-right">Total Hours</TableHead>
-            <TableHead className="text-right">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {allRecords.map((record) => (
-            <TableRow key={record.id}>
-              <TableCell className="font-mono">{record.id}</TableCell>
-              <TableCell>{format(new Date(record.dateOfWan), 'MMM dd, yyyy')}</TableCell>
-              <TableCell>{record.remarks || 'N/A'}</TableCell>
-              <TableCell className="text-right">{(record.totalHours || 0).toFixed(2)}</TableCell>
-              <TableCell className="text-right">
-                  <Badge variant={
-                      record.status === 'used' ? 'destructive' :
-                      record.status === 'rejected' ? 'destructive' :
-                      'secondary'
-                  }>
-                      {record.status}
-                  </Badge>
-              </TableCell>
+      <>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>WAN Code</TableHead>
+              <TableHead>Date of WAN</TableHead>
+              <TableHead>Remarks</TableHead>
+              <TableHead className="text-right">Total Hours</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+              <TableHead className="text-right">Action</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {allRecords.map((record) => (
+              <TableRow key={record.id}>
+                <TableCell className="font-mono">{record.id}</TableCell>
+                <TableCell>{format(new Date(record.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>{record.remarks || 'N/A'}</TableCell>
+                <TableCell className="text-right">{(record.totalHours || 0).toFixed(2)}</TableCell>
+                <TableCell className="text-right">
+                    <Badge variant={
+                        record.status === 'used' ? 'destructive' :
+                        record.status === 'rejected' ? 'destructive' :
+                        'secondary'
+                    }>
+                        {record.status}
+                    </Badge>
+                </TableCell>
+                <TableCell className="text-right space-x-1">
+                    <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handlePrint(record.id)}
+                        disabled={record.status === 'rejected'}
+                        aria-label="Print WAN"
+                    >
+                        <Printer className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleEdit(record)}
+                        disabled={record.status !== 'available'}
+                        aria-label="Edit WAN"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <EditWanDialog 
+            wan={selectedWan}
+            open={isEditWanOpen}
+            onOpenChange={setIsEditWanOpen}
+            onUpdateSuccess={() => setDataVersion(v => v + 1)}
+        />
+      </>
     );
   }
 
