@@ -50,7 +50,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -69,6 +69,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { DayPicker, DayProps, useDayRender } from 'react-day-picker';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 
 interface LeaveRequest extends DocumentData {
@@ -804,7 +805,8 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
             return {
                 employeeId: employee.id,
                 name: employee.name,
-                totalHours: totalHours
+                totalHours: totalHours,
+                availableWans: employeeWans,
             };
         });
         
@@ -868,6 +870,7 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-12"></TableHead>
                             <TableHead>ID No.</TableHead>
                             <TableHead>Employee Name</TableHead>
                             <TableHead className="text-right">Total Available Hours</TableHead>
@@ -875,11 +878,50 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                     </TableHeader>
                     <TableBody>
                         {employeeBalances.map((employee) => (
-                            <TableRow key={employee.employeeId}>
-                                <TableCell>{employee.employeeId}</TableCell>
-                                <TableCell>{employee.name}</TableCell>
-                                <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
-                            </TableRow>
+                            <Collapsible key={employee.employeeId} asChild>
+                                <>
+                                    <CollapsibleTrigger asChild>
+                                        <TableRow className="cursor-pointer">
+                                            <TableCell>
+                                                <ChevronDown className="h-4 w-4 transition-transform ui-open:rotate-180" />
+                                            </TableCell>
+                                            <TableCell>{employee.employeeId}</TableCell>
+                                            <TableCell>{employee.name}</TableCell>
+                                            <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
+                                        </TableRow>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent asChild>
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="p-0">
+                                                <div className="p-4 bg-muted/50">
+                                                    {employee.availableWans.length > 0 ? (
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead>WAN Code</TableHead>
+                                                                    <TableHead>Date</TableHead>
+                                                                    <TableHead className="text-right">Hours</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {employee.availableWans.map(wan => (
+                                                                    <TableRow key={wan.id}>
+                                                                        <TableCell className="font-mono">{wan.id}</TableCell>
+                                                                        <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                                                        <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    ) : (
+                                                        <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    </CollapsibleContent>
+                                </>
+                            </Collapsible>
                         ))}
                     </TableBody>
                 </Table>
@@ -1038,8 +1080,8 @@ function AdminLogin({ onLoginSuccess }: { onLoginSuccess: (user: AppUser) => voi
     });
 
     const getEmployeeName = (employeeId: string) => {
-        if (isLoading) return 'Loading...';
-        return employees?.find(e => e.id === employeeId)?.name || 'Unknown User';
+        if (!employees) return 'Loading...';
+        return employees.find(e => e.id === employeeId)?.name || 'Unknown User';
     }
 
     const validAdminUsers = useMemo(() => {
