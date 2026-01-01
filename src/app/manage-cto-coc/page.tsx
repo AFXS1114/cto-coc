@@ -50,7 +50,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -629,6 +629,9 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
                     </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-1">
+                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                    <Download className="h-5 w-5" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
                     <Printer className="h-5 w-5" />
                   </Button>
