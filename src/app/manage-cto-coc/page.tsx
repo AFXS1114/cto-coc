@@ -888,9 +888,9 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                             <TableHead className="text-right">Total Available Hours</TableHead>
                         </TableRow>
                     </TableHeader>
-                    {employeeBalances.map((employee) => (
-                        <Collapsible key={employee.employeeId} asChild>
-                            <tbody className="border-b">
+                    <TableBody>
+                        {employeeBalances.map((employee) => (
+                            <Collapsible key={employee.employeeId} as="tbody" className="border-b">
                                 <CollapsibleTrigger asChild>
                                     <TableRow className="cursor-pointer">
                                         <TableCell>
@@ -931,9 +931,9 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                                         </TableCell>
                                     </TableRow>
                                 </CollapsibleContent>
-                            </tbody>
-                        </Collapsible>
-                    ))}
+                            </Collapsible>
+                        ))}
+                    </TableBody>
                 </Table>
             )}
         </div>
@@ -941,14 +941,24 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
 }
 
 function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
+    const [searchTerm, setSearchTerm] = useState('');
     const [selectedWans, setSelectedWans] = useState<string[]>([]);
     const [isExporting, setIsExporting] = useState(false);
     const { toast } = useToast();
     const printAreaRef = useRef<HTMLDivElement>(null);
 
+    const filteredWanRequests = useMemo(() => {
+        if (!wanRequests) return [];
+        if (!searchTerm) return wanRequests;
+        return wanRequests.filter(wan => 
+            wan.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+            wan.id.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [wanRequests, searchTerm]);
+
     const handleSelectAll = (checked: boolean | 'indeterminate') => {
         if (checked === true) {
-            setSelectedWans(wanRequests?.map(wan => wan.id) || []);
+            setSelectedWans(filteredWanRequests?.map(wan => wan.id) || []);
         } else {
             setSelectedWans([]);
         }
@@ -977,24 +987,12 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
         for (let i = 0; i < wanDocsToExport.length; i++) {
             const wan = wanDocsToExport[i];
             
-            // Create a temporary container for rendering the form
-            const formContainer = document.createElement('div');
-            formContainer.style.position = 'absolute';
-            formContainer.style.left = '-9999px';
-            formContainer.style.width = '210mm'; // A4 width
-            printArea.appendChild(formContainer);
-
-            // Dynamically render WanPrintForm. We need a way to do this.
-            // For now, let's assume we can get the HTML content.
-            // This part is tricky without a proper way to render component to string.
-            // A simple approach: render all selected in the hidden div.
-            
             const wanId = wan.id;
             const wanFormElement = document.getElementById(`wan-form-to-export-${wanId}`);
 
             if (wanFormElement) {
                 const canvas = await html2canvas(wanFormElement, {
-                    scale: 2, // Higher scale for better quality
+                    scale: 2,
                     useCORS: true,
                 });
 
@@ -1009,8 +1007,15 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             }
         }
+        
+        let filename = 'WAN_Export.pdf';
+        if (wanDocsToExport.length === 1) {
+            const wan = wanDocsToExport[0];
+            const date = format(new Date(wan.dateOfWan), 'yyyy-MM-dd');
+            filename = `${wan.name}_${date}_${wan.id}.pdf`.replace(/ /g, '_');
+        }
 
-        pdf.save('WAN_Export.pdf');
+        pdf.save(filename);
         setIsExporting(false);
         setSelectedWans([]);
         toast({
@@ -1022,11 +1027,17 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-4">
-                <div className="text-muted-foreground">
-                    Select the WAN records you want to export to a single PDF document.
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                 <div className="relative w-full sm:w-auto sm:flex-grow">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                        placeholder="Search by name or WAN code..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                    />
                 </div>
-                <Button onClick={handleExport} disabled={isExporting || selectedWans.length === 0}>
+                <Button onClick={handleExport} disabled={isExporting || selectedWans.length === 0} className="w-full sm:w-auto">
                     {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                     Export {selectedWans.length > 0 ? `(${selectedWans.length})` : ''} to PDF
                 </Button>
@@ -1036,7 +1047,7 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                     <Skeleton className="h-12 w-full" />
                     <Skeleton className="h-12 w-full" />
                 </div>
-            ) : !wanRequests || wanRequests.length === 0 ? (
+            ) : !filteredWanRequests || filteredWanRequests.length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">No WAN records found.</p>
             ) : (
                 <Table>
@@ -1044,7 +1055,7 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                         <TableRow>
                             <TableHead className="w-[50px]">
                                 <Checkbox
-                                    checked={selectedWans.length === wanRequests.length || (selectedWans.length > 0 && 'indeterminate')}
+                                    checked={selectedWans.length > 0 && selectedWans.length === filteredWanRequests.length}
                                     onCheckedChange={handleSelectAll}
                                 />
                             </TableHead>
@@ -1055,7 +1066,7 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {wanRequests.map(wan => (
+                        {filteredWanRequests.map(wan => (
                             <TableRow key={wan.id}>
                                 <TableCell>
                                     <Checkbox
