@@ -4,7 +4,7 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Printer, Loader2 } from 'lucide-react';
+import { Printer, Loader2, Download } from 'lucide-react';
 import WanPrintForm from './WanPrintForm';
 
 function PrintWanContent() {
@@ -32,6 +32,10 @@ function PrintWanContent() {
         </div>
         <div className="fixed bottom-4 right-4 print:hidden flex gap-2">
             <Button onClick={() => window.close()}>Close</Button>
+            <Button onClick={handlePrint}>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+            </Button>
             <Button onClick={handlePrint}>
                 <Printer className="mr-2 h-4 w-4" />
                 Print
