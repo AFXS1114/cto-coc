@@ -71,6 +71,7 @@ import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import JSZip from 'jszip';
 
 
 interface LeaveRequest extends DocumentData {
@@ -890,47 +891,49 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                     </TableHeader>
                     <TableBody>
                         {employeeBalances.map((employee) => (
-                            <Collapsible key={employee.employeeId} as="tbody" className="border-b">
-                                <CollapsibleTrigger asChild>
-                                    <TableRow className="cursor-pointer">
-                                        <TableCell>
-                                            <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
-                                        </TableCell>
-                                        <TableCell>{employee.employeeId}</TableCell>
-                                        <TableCell>{employee.name}</TableCell>
-                                        <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
-                                    </TableRow>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent asChild>
-                                    <TableRow>
-                                        <TableCell colSpan={4} className="p-0">
-                                            <div className="p-4 bg-muted/50">
-                                                {employee.availableWans.length > 0 ? (
-                                                    <Table>
-                                                        <TableHeader>
-                                                            <TableRow>
-                                                                <TableHead>WAN Code</TableHead>
-                                                                <TableHead>Date</TableHead>
-                                                                <TableHead className="text-right">Hours</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {employee.availableWans.map(wan => (
-                                                                <TableRow key={wan.id}>
-                                                                    <TableCell className="font-mono">{wan.id}</TableCell>
-                                                                    <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
-                                                                    <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
+                             <Collapsible key={employee.employeeId} asChild>
+                                <>
+                                    <CollapsibleTrigger asChild>
+                                        <TableRow className="cursor-pointer">
+                                            <TableCell>
+                                                <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
+                                            </TableCell>
+                                            <TableCell>{employee.employeeId}</TableCell>
+                                            <TableCell>{employee.name}</TableCell>
+                                            <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
+                                        </TableRow>
+                                    </CollapsibleTrigger>
+                                    <CollapsibleContent asChild>
+                                        <TableRow>
+                                            <TableCell colSpan={4} className="p-0">
+                                                <div className="p-4 bg-muted/50">
+                                                    {employee.availableWans.length > 0 ? (
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead>WAN Code</TableHead>
+                                                                    <TableHead>Date</TableHead>
+                                                                    <TableHead className="text-right">Hours</TableHead>
                                                                 </TableRow>
-                                                            ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                ) : (
-                                                    <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                </CollapsibleContent>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {employee.availableWans.map(wan => (
+                                                                    <TableRow key={wan.id}>
+                                                                        <TableCell className="font-mono">{wan.id}</TableCell>
+                                                                        <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                                                        <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    ) : (
+                                                        <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    </CollapsibleContent>
+                                </>
                             </Collapsible>
                         ))}
                     </TableBody>
@@ -963,6 +966,11 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
             setSelectedWans([]);
         }
     };
+    
+    const getFileName = (wan: WanRequest) => {
+        const date = format(new Date(wan.dateOfWan), 'yyyy-MM-dd');
+        return `${wan.name}_${date}_${wan.id}.pdf`.replace(/ /g, '_');
+    }
 
     const handleExport = async () => {
         if (selectedWans.length === 0) {
@@ -975,52 +983,54 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
         }
 
         setIsExporting(true);
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const printArea = printAreaRef.current;
-        if (!printArea) {
-            setIsExporting(false);
-            return;
-        }
-
+        
         const wanDocsToExport = wanRequests?.filter(wan => selectedWans.includes(wan.id)) || [];
 
-        for (let i = 0; i < wanDocsToExport.length; i++) {
-            const wan = wanDocsToExport[i];
-            
-            const wanId = wan.id;
-            const wanFormElement = document.getElementById(`wan-form-to-export-${wanId}`);
-
+        if (wanDocsToExport.length === 1) {
+            // Single file download
+            const wan = wanDocsToExport[0];
+            const wanFormElement = document.getElementById(`wan-form-to-export-${wan.id}`);
             if (wanFormElement) {
-                const canvas = await html2canvas(wanFormElement, {
-                    scale: 2,
-                    useCORS: true,
-                });
-
+                const canvas = await html2canvas(wanFormElement, { scale: 2, useCORS: true });
+                const pdf = new jsPDF('p', 'mm', 'a4');
                 const imgData = canvas.toDataURL('image/png');
                 const imgProps = pdf.getImageProperties(imgData);
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-                
-                if (i > 0) {
-                    pdf.addPage();
-                }
                 pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(getFileName(wan));
             }
-        }
-        
-        let filename = 'WAN_Export.pdf';
-        if (wanDocsToExport.length === 1) {
-            const wan = wanDocsToExport[0];
-            const date = format(new Date(wan.dateOfWan), 'yyyy-MM-dd');
-            filename = `${wan.name}_${date}_${wan.id}.pdf`.replace(/ /g, '_');
+        } else {
+            // Multiple files zip download
+            const zip = new JSZip();
+            for (const wan of wanDocsToExport) {
+                const wanFormElement = document.getElementById(`wan-form-to-export-${wan.id}`);
+                if (wanFormElement) {
+                    const canvas = await html2canvas(wanFormElement, { scale: 2, useCORS: true });
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    const pdfBlob = pdf.output('blob');
+                    zip.file(getFileName(wan), pdfBlob);
+                }
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(zipBlob);
+            link.download = 'WAN_Export.zip';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
-        pdf.save(filename);
         setIsExporting(false);
         setSelectedWans([]);
         toast({
             title: 'Export Successful',
-            description: `${selectedWans.length} WAN records have been exported to PDF.`,
+            description: `${selectedWans.length} WAN records have been exported.`,
         });
     };
     
@@ -1039,7 +1049,7 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                 </div>
                 <Button onClick={handleExport} disabled={isExporting || selectedWans.length === 0} className="w-full sm:w-auto">
                     {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    Export {selectedWans.length > 0 ? `(${selectedWans.length})` : ''} to PDF
+                    Export {selectedWans.length > 0 ? `(${selectedWans.length})` : ''}
                 </Button>
             </div>
              {isLoading ? (
@@ -1099,12 +1109,11 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
             )}
             {/* Hidden area for rendering forms to be captured */}
             <div ref={printAreaRef} style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -10 }}>
-                {selectedWans.map(wanId => {
-                    const wan = wanRequests?.find(w => w.id === wanId);
+                {wanRequests?.map(wan => {
                     if (!wan) return null;
                     return (
-                        <div key={wanId} id={`wan-form-to-export-${wanId}`} style={{ width: '800px', background: 'white', padding: '20px' }}>
-                             <WanPrintForm wanId={wanId} />
+                        <div key={wan.id} id={`wan-form-to-export-${wan.id}`} style={{ width: '800px', background: 'white', padding: '20px' }}>
+                             <WanPrintForm wanId={wan.id} />
                         </div>
                     )
                 })}
