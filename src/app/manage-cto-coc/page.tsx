@@ -165,6 +165,9 @@ function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'l
                 </ScrollArea>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    {docInfo.type === 'wan' && (
+                        <Button onClick={handlePrint}><Download className="mr-2 h-4 w-4"/> Export PDF</Button>
+                    )}
                     <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4"/> Print</Button>
                 </DialogFooter>
             </DialogContent>
