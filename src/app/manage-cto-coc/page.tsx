@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,7 +50,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -68,8 +68,9 @@ import WanPrintForm from '../print-wan/WanPrintForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { DayPicker, DayProps, useDayRender } from 'react-day-picker';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 
 interface LeaveRequest extends DocumentData {
@@ -780,9 +781,13 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         const yearSet = new Set<string>();
         const monthSet = new Set<string>();
         allWans.forEach(wan => {
-            const date = new Date(wan.dateOfWan);
-            yearSet.add(format(date, 'yyyy'));
-            monthSet.add(format(date, 'MMMM'));
+            try {
+                const date = new Date(wan.dateOfWan);
+                yearSet.add(format(date, 'yyyy'));
+                monthSet.add(format(date, 'MMMM'));
+            } catch(e) {
+                // Ignore invalid dates
+            }
         });
         const sortedYears = Array.from(yearSet).sort((a, b) => parseInt(b) - parseInt(a));
         const allMonths = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -796,10 +801,14 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         let filteredWans = wanRequests || [];
 
         if (selectedYear !== 'all') {
-            filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'yyyy') === selectedYear);
+            filteredWans = filteredWans.filter(wan => {
+                try { return format(new Date(wan.dateOfWan), 'yyyy') === selectedYear } catch(e) { return false }
+            });
         }
         if (selectedMonth !== 'all') {
-            filteredWans = filteredWans.filter(wan => format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth);
+            filteredWans = filteredWans.filter(wan => {
+                try { return format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth } catch(e) { return false }
+            });
         }
         
         const balances = employees.map(employee => {
@@ -879,58 +888,218 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                             <TableHead className="text-right">Total Available Hours</TableHead>
                         </TableRow>
                     </TableHeader>
-                    <TableBody>
-                        {employeeBalances.map((employee) => (
-                             <Collapsible key={employee.employeeId} asChild>
-                                <>
-                                    <CollapsibleTrigger asChild>
-                                        <TableRow className="cursor-pointer">
-                                            <TableCell>
-                                                <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
-                                            </TableCell>
-                                            <TableCell>{employee.employeeId}</TableCell>
-                                            <TableCell>{employee.name}</TableCell>
-                                            <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
-                                        </TableRow>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent asChild>
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="p-0">
-                                                <div className="p-4 bg-muted/50">
-                                                    {employee.availableWans.length > 0 ? (
-                                                        <Table>
-                                                            <TableHeader>
-                                                                <TableRow>
-                                                                    <TableHead>WAN Code</TableHead>
-                                                                    <TableHead>Date</TableHead>
-                                                                    <TableHead className="text-right">Hours</TableHead>
+                    {employeeBalances.map((employee) => (
+                        <Collapsible key={employee.employeeId} asChild>
+                            <tbody className="border-b">
+                                <CollapsibleTrigger asChild>
+                                    <TableRow className="cursor-pointer">
+                                        <TableCell>
+                                            <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
+                                        </TableCell>
+                                        <TableCell>{employee.employeeId}</TableCell>
+                                        <TableCell>{employee.name}</TableCell>
+                                        <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
+                                    </TableRow>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent asChild>
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="p-0">
+                                            <div className="p-4 bg-muted/50">
+                                                {employee.availableWans.length > 0 ? (
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>WAN Code</TableHead>
+                                                                <TableHead>Date</TableHead>
+                                                                <TableHead className="text-right">Hours</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {employee.availableWans.map(wan => (
+                                                                <TableRow key={wan.id}>
+                                                                    <TableCell className="font-mono">{wan.id}</TableCell>
+                                                                    <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                                                    <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
                                                                 </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {employee.availableWans.map(wan => (
-                                                                    <TableRow key={wan.id}>
-                                                                        <TableCell className="font-mono">{wan.id}</TableCell>
-                                                                        <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
-                                                                        <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    ) : (
-                                                        <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    </CollapsibleContent>
-                                </>
-                            </Collapsible>
-                        ))}
-                    </TableBody>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                ) : (
+                                                    <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                </CollapsibleContent>
+                            </tbody>
+                        </Collapsible>
+                    ))}
                 </Table>
             )}
         </div>
     )
+}
+
+function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | null, isLoading: boolean }) {
+    const [selectedWans, setSelectedWans] = useState<string[]>([]);
+    const [isExporting, setIsExporting] = useState(false);
+    const { toast } = useToast();
+    const printAreaRef = useRef<HTMLDivElement>(null);
+
+    const handleSelectAll = (checked: boolean | 'indeterminate') => {
+        if (checked === true) {
+            setSelectedWans(wanRequests?.map(wan => wan.id) || []);
+        } else {
+            setSelectedWans([]);
+        }
+    };
+
+    const handleExport = async () => {
+        if (selectedWans.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'No WANs Selected',
+                description: 'Please select at least one WAN record to export.',
+            });
+            return;
+        }
+
+        setIsExporting(true);
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const printArea = printAreaRef.current;
+        if (!printArea) {
+            setIsExporting(false);
+            return;
+        }
+
+        const wanDocsToExport = wanRequests?.filter(wan => selectedWans.includes(wan.id)) || [];
+
+        for (let i = 0; i < wanDocsToExport.length; i++) {
+            const wan = wanDocsToExport[i];
+            
+            // Create a temporary container for rendering the form
+            const formContainer = document.createElement('div');
+            formContainer.style.position = 'absolute';
+            formContainer.style.left = '-9999px';
+            formContainer.style.width = '210mm'; // A4 width
+            printArea.appendChild(formContainer);
+
+            // Dynamically render WanPrintForm. We need a way to do this.
+            // For now, let's assume we can get the HTML content.
+            // This part is tricky without a proper way to render component to string.
+            // A simple approach: render all selected in the hidden div.
+            
+            const wanId = wan.id;
+            const wanFormElement = document.getElementById(`wan-form-to-export-${wanId}`);
+
+            if (wanFormElement) {
+                const canvas = await html2canvas(wanFormElement, {
+                    scale: 2, // Higher scale for better quality
+                    useCORS: true,
+                });
+
+                const imgData = canvas.toDataURL('image/png');
+                const imgProps = pdf.getImageProperties(imgData);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            }
+        }
+
+        pdf.save('WAN_Export.pdf');
+        setIsExporting(false);
+        setSelectedWans([]);
+        toast({
+            title: 'Export Successful',
+            description: `${selectedWans.length} WAN records have been exported to PDF.`,
+        });
+    };
+    
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-4">
+                <div className="text-muted-foreground">
+                    Select the WAN records you want to export to a single PDF document.
+                </div>
+                <Button onClick={handleExport} disabled={isExporting || selectedWans.length === 0}>
+                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    Export {selectedWans.length > 0 ? `(${selectedWans.length})` : ''} to PDF
+                </Button>
+            </div>
+             {isLoading ? (
+                <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                </div>
+            ) : !wanRequests || wanRequests.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No WAN records found.</p>
+            ) : (
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead className="w-[50px]">
+                                <Checkbox
+                                    checked={selectedWans.length === wanRequests.length || (selectedWans.length > 0 && 'indeterminate')}
+                                    onCheckedChange={handleSelectAll}
+                                />
+                            </TableHead>
+                            <TableHead>WAN Code</TableHead>
+                            <TableHead>Employee Name</TableHead>
+                            <TableHead>Date of WAN</TableHead>
+                            <TableHead>Status</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {wanRequests.map(wan => (
+                            <TableRow key={wan.id}>
+                                <TableCell>
+                                    <Checkbox
+                                        checked={selectedWans.includes(wan.id)}
+                                        onCheckedChange={checked => {
+                                            if (checked) {
+                                                setSelectedWans(prev => [...prev, wan.id]);
+                                            } else {
+                                                setSelectedWans(prev => prev.filter(id => id !== wan.id));
+                                            }
+                                        }}
+                                    />
+                                </TableCell>
+                                <TableCell className="font-mono">{wan.id}</TableCell>
+                                <TableCell>{wan.name}</TableCell>
+                                <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                <TableCell>
+                                    <Badge variant={
+                                        wan.status === 'used' ? 'destructive' :
+                                        wan.status === 'rejected' ? 'destructive' :
+                                        'secondary'
+                                    }>
+                                        {wan.status}
+                                    </Badge>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            )}
+            {/* Hidden area for rendering forms to be captured */}
+            <div ref={printAreaRef} style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -10 }}>
+                {selectedWans.map(wanId => {
+                    const wan = wanRequests?.find(w => w.id === wanId);
+                    if (!wan) return null;
+                    return (
+                        <div key={wanId} id={`wan-form-to-export-${wanId}`} style={{ width: '800px', background: 'white', padding: '20px' }}>
+                             <WanPrintForm wanId={wanId} />
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    );
 }
 
 function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
@@ -953,14 +1122,18 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
     const usedWanQuery = useMemoFirebase(() => collection(firestore, 'used-wan'), [firestore, wanDataVersion]);
     const { data: usedWans, isLoading: isLoadingUsed } = useCollection<WanRequest>(usedWanQuery);
 
+    const rejectedWanQuery = useMemoFirebase(() => collection(firestore, 'rejected-wan'), [firestore, wanDataVersion]);
+    const { data: rejectedWans, isLoading: isLoadingRejected } = useCollection<WanRequest>(rejectedWanQuery);
+
     const allWanRequests = useMemo(() => {
         const wans: WanRequest[] = [];
         if (filedWans) wans.push(...filedWans.map(w => ({...w, status: 'available' as const})));
         if (usedWans) wans.push(...usedWans.map(w => ({...w, status: 'used' as const})));
-        return wans;
-    }, [filedWans, usedWans]);
+        if (rejectedWans) wans.push(...rejectedWans.map(w => ({...w, status: 'rejected' as const})));
+        return wans.sort((a,b) => new Date(b.dateOfWan).getTime() - new Date(a.dateOfWan).getTime());
+    }, [filedWans, usedWans, rejectedWans]);
 
-    const isLoadingWan = isLoadingFiled || isLoadingUsed;
+    const isLoadingWan = isLoadingFiled || isLoadingUsed || isLoadingRejected;
 
     const approvedLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'processed-cto'),
@@ -990,7 +1163,7 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
         </CardHeader>
       <CardContent>
         <Tabs defaultValue="pending-leave">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="pending-leave" className="flex items-center gap-2">
                 Pending Leave
                 {pendingRequests && pendingRequests.length > 0 && (
@@ -1005,6 +1178,7 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
             </TabsTrigger>
             <TabsTrigger value="wan-balances">WAN Balances</TabsTrigger>
             <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
+            <TabsTrigger value="export">Export</TabsTrigger>
           </TabsList>
           <TabsContent value="pending-leave" className="pt-4">
             <PendingLeaveTable 
@@ -1031,6 +1205,9 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
                 isLoading={isLoadingApproved || isLoadingCancelled}
                 onPrint={(id) => setPreviewDoc({type: 'leave', id})}
             />
+          </TabsContent>
+          <TabsContent value="export" className="pt-4">
+            <WanExportTab wanRequests={allWanRequests} isLoading={isLoadingWan} />
           </TabsContent>
         </Tabs>
         <Button asChild variant="link" className="mt-6 w-full">
