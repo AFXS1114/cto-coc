@@ -633,9 +633,6 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
                 </TableCell>
                 <TableCell className="text-right space-x-1">
                   <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
-                    <Download className="h-5 w-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
                     <Printer className="h-5 w-5" />
                   </Button>
                   <AlertDialog>
@@ -884,49 +881,47 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                     </TableHeader>
                     <TableBody>
                         {employeeBalances.map((employee) => (
-                            <Collapsible key={employee.employeeId} asChild>
-                                <>
-                                    <CollapsibleTrigger asChild>
-                                        <TableRow className="cursor-pointer">
-                                            <TableCell>
-                                                <ChevronDown className="h-4 w-4 transition-transform ui-open:rotate-180" />
-                                            </TableCell>
-                                            <TableCell>{employee.employeeId}</TableCell>
-                                            <TableCell>{employee.name}</TableCell>
-                                            <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
-                                        </TableRow>
-                                    </CollapsibleTrigger>
-                                    <CollapsibleContent asChild>
-                                        <TableRow>
-                                            <TableCell colSpan={4} className="p-0">
-                                                <div className="p-4 bg-muted/50">
-                                                    {employee.availableWans.length > 0 ? (
-                                                        <Table>
-                                                            <TableHeader>
-                                                                <TableRow>
-                                                                    <TableHead>WAN Code</TableHead>
-                                                                    <TableHead>Date</TableHead>
-                                                                    <TableHead className="text-right">Hours</TableHead>
+                            <Collapsible as="tbody" key={employee.employeeId} className="border-b">
+                                <CollapsibleTrigger asChild>
+                                    <TableRow className="cursor-pointer">
+                                        <TableCell>
+                                            <ChevronDown className="h-4 w-4 transition-transform ui-open:rotate-180" />
+                                        </TableCell>
+                                        <TableCell>{employee.employeeId}</TableCell>
+                                        <TableCell>{employee.name}</TableCell>
+                                        <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
+                                    </TableRow>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent asChild>
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="p-0">
+                                            <div className="p-4 bg-muted/50">
+                                                {employee.availableWans.length > 0 ? (
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>WAN Code</TableHead>
+                                                                <TableHead>Date</TableHead>
+                                                                <TableHead className="text-right">Hours</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {employee.availableWans.map(wan => (
+                                                                <TableRow key={wan.id}>
+                                                                    <TableCell className="font-mono">{wan.id}</TableCell>
+                                                                    <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                                                    <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
                                                                 </TableRow>
-                                                            </TableHeader>
-                                                            <TableBody>
-                                                                {employee.availableWans.map(wan => (
-                                                                    <TableRow key={wan.id}>
-                                                                        <TableCell className="font-mono">{wan.id}</TableCell>
-                                                                        <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
-                                                                        <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
-                                                                    </TableRow>
-                                                                ))}
-                                                            </TableBody>
-                                                        </Table>
-                                                    ) : (
-                                                        <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    </CollapsibleContent>
-                                </>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                ) : (
+                                                    <p className="text-center text-muted-foreground text-sm py-2">No available WANs for this period.</p>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                </CollapsibleContent>
                             </Collapsible>
                         ))}
                     </TableBody>
