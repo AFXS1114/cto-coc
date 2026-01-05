@@ -57,6 +57,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import WanPrintForm from '../print-wan/WanPrintForm';
 
 
 interface Employee {
@@ -130,7 +132,7 @@ const taskOptions = [
 ];
 
 const editWanFormSchema = z.object({
-  wanCode: z.string(),
+  id: z.string(),
   name: z.string(),
   dateOfWan: z.date(),
   unitDivision: z.string(),
@@ -496,6 +498,7 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
         
         const submissionData = {
             ...data,
+            id: wan.id, // Ensure the original ID is preserved
             dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
             tasks: data.tasks.map(task => ({ value: task.value })),
         };
@@ -644,8 +647,7 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
     );
 }
 
-
-function WanRecordsTable({ employee }: { employee: Employee }) {
+function WanRecordsTable({ employee, onPrintClick }: { employee: Employee, onPrintClick: (wanId: string) => void }) {
     const firestore = useFirestore();
     const [selectedWan, setSelectedWan] = useState<WanRecord | null>(null);
     const [isEditWanOpen, setIsEditWanOpen] = useState(false);
@@ -677,10 +679,6 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
         setIsEditWanOpen(true);
     };
 
-    const handlePrint = (wanId: string) => {
-        window.open(`/print-wan?id=${wanId}`, '_blank');
-    };
-  
     const allRecords = useMemo(() => {
       if (!filedWans && !usedWans && !rejectedWans) return [];
       const records: WanRecord[] = [
@@ -738,7 +736,7 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
                     <Button 
                         variant="ghost" 
                         size="icon"
-                        onClick={() => handlePrint(record.id)}
+                        onClick={() => onPrintClick(record.id)}
                         disabled={record.status === 'rejected'}
                         aria-label="Print WAN"
                     >
@@ -766,7 +764,7 @@ function WanRecordsTable({ employee }: { employee: Employee }) {
         />
       </>
     );
-  }
+}
 
 function ChangePasswordDialog({ open, onOpenChange, appUserDocId }: { open: boolean, onOpenChange: (open: boolean) => void, appUserDocId: string | null }) {
     const { toast } = useToast();
@@ -902,14 +900,53 @@ function ChangePasswordDialog({ open, onOpenChange, appUserDocId }: { open: bool
     );
 }
 
+function PrintPreviewModal({ docId, open, onOpenChange }: { docId: string | null, open: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!docId) return null;
+
+    const handlePrint = () => {
+        const printContent = document.getElementById('print-content');
+        if (printContent) {
+            const originalContents = document.body.innerHTML;
+            document.body.innerHTML = printContent.innerHTML;
+            window.print();
+            document.body.innerHTML = originalContents;
+            window.location.reload();
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl h-[90vh]">
+                <DialogHeader>
+                    <DialogTitle>Print Preview: {docId}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="h-full">
+                    <div id="print-content">
+                        <WanPrintForm wanId={docId} />
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4"/> Print</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
     const [changePasswordOpen, setChangePasswordOpen] = useState(false);
     const [appUserDocId, setAppUserDocId] = useState<string | null>(null);
+    const [previewDocId, setPreviewDocId] = useState<string | null>(null);
 
     useEffect(() => {
         const id = sessionStorage.getItem('appUserDocId');
         setAppUserDocId(id);
     }, []);
+
+    const handlePrintClick = (wanId: string) => {
+        setPreviewDocId(wanId);
+    };
 
     return (
         <>
@@ -960,7 +997,7 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                             <LeaveRecordsTable employee={employee} />
                         </TabsContent>
                          <TabsContent value="my-wancoc-records" className="pt-4">
-                            <WanRecordsTable employee={employee} />
+                            <WanRecordsTable employee={employee} onPrintClick={handlePrintClick} />
                         </TabsContent>
                     </Tabs>
                 </div>
@@ -976,6 +1013,11 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
             open={changePasswordOpen}
             onOpenChange={setChangePasswordOpen}
             appUserDocId={appUserDocId}
+        />
+        <PrintPreviewModal 
+            docId={previewDocId}
+            open={!!previewDocId}
+            onOpenChange={(isOpen) => { if (!isOpen) setPreviewDocId(null) }}
         />
         </>
     )
