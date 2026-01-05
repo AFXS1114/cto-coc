@@ -162,6 +162,10 @@
         "remarks": {
             "type": "string",
             "description": "Remarks for rejecting a WAN request."
+        },
+        "sourceWanId": {
+            "type": "string",
+            "description": "If this WAN was created from splitting another WAN, this is the ID of the original WAN."
         }
       },
       "required": ["id", "name", "dateOfWan", "unitDivision", "inclusiveTimes", "tasks", "totalHours"]
