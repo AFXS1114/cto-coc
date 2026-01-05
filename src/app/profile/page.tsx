@@ -439,8 +439,8 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
         if (wan) {
             form.reset({
                 ...wan,
+                id: wan.id,
                 dateOfWan: new Date(wan.dateOfWan),
-                // transform tasks for the form
                 tasks: wan.tasks.map(task => {
                     const isPredefined = taskOptions.includes(task.value);
                     return {
@@ -498,7 +498,7 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
         
         const submissionData = {
             ...data,
-            id: wan.id, // Ensure the original ID is preserved
+            id: wan.id,
             dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
             tasks: data.tasks.map(task => ({ value: task.value })),
         };
@@ -506,7 +506,7 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
         const docRef = doc(firestore, 'filed-wan', wan.id);
         
         try {
-            await setDoc(docRef, submissionData);
+            await setDoc(docRef, submissionData, { merge: true });
             toast({
                 title: 'WAN Updated Successfully!',
                 description: `Your WAN request (${wan.id}) has been updated.`,
@@ -535,6 +535,19 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto pr-6">
+                         <FormField
+                            control={form.control}
+                            name="wanCode"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>WAN Code</FormLabel>
+                                <FormControl>
+                                <Input {...field} readOnly className="bg-muted" value={wan.id}/>
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="dateOfWan"
@@ -934,6 +947,43 @@ function PrintPreviewModal({ docId, open, onOpenChange }: { docId: string | null
     );
 }
 
+function WanBalanceCard({ employee }: { employee: Employee }) {
+    const firestore = useFirestore();
+
+    const availableWanQuery = useMemoFirebase(() => {
+        if (!firestore || !employee) return null;
+        return query(
+            collection(firestore, 'filed-wan'),
+            where('name', '==', employee.name),
+            where('status', '==', 'available')
+        );
+    }, [firestore, employee]);
+
+    const { data: availableWans, isLoading } = useCollection<WanRecord>(availableWanQuery);
+
+    const totalHours = useMemo(() => {
+        if (!availableWans) return 0;
+        return availableWans.reduce((sum, wan) => sum + (wan.totalHours || 0), 0);
+    }, [availableWans]);
+
+    return (
+        <Card className="flex flex-col items-center justify-center p-4">
+            <CardHeader className="p-2 text-center">
+                <CardDescription>Available WAN/COC Hours</CardDescription>
+            </CardHeader>
+            <CardContent className="p-2">
+                {isLoading ? (
+                    <Skeleton className="h-10 w-24" />
+                ) : (
+                    <h2 className="text-4xl font-bold tracking-tighter">
+                        {totalHours.toFixed(2)}
+                    </h2>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
 function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () => void }) {
     const [changePasswordOpen, setChangePasswordOpen] = useState(false);
     const [appUserDocId, setAppUserDocId] = useState<string | null>(null);
@@ -963,29 +1013,30 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-lg bg-muted/50 border">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-lg bg-muted/50 border md:col-span-2">
                             <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
                             <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
                         </div>
-                         <div className="flex flex-col gap-4">
-                            <Button asChild className="w-full">
-                                <Link href="/leave-cto">
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    File Leave/CTO
-                                </Link>
-                            </Button>
-                            <Button asChild className="w-full">
-                                <Link href="/wan-coc">
-                                    <Globe className="mr-2 h-4 w-4" />
-                                    File WAN/COC
-                                </Link>
-                            </Button>
-                             <Button variant="outline" onClick={() => setChangePasswordOpen(true)} className="w-full">
-                                <KeyRound className="mr-2 h-4 w-4" />
-                                Change Password
-                            </Button>
-                        </div>
+                        <WanBalanceCard employee={employee} />
+                    </div>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                        <Button asChild className="w-full">
+                            <Link href="/leave-cto">
+                                <FileText className="mr-2 h-4 w-4" />
+                                File Leave/CTO
+                            </Link>
+                        </Button>
+                        <Button asChild className="w-full">
+                            <Link href="/wan-coc">
+                                <Globe className="mr-2 h-4 w-4" />
+                                File WAN/COC
+                            </Link>
+                        </Button>
+                         <Button variant="outline" onClick={() => setChangePasswordOpen(true)} className="w-full">
+                            <KeyRound className="mr-2 h-4 w-4" />
+                            Change Password
+                        </Button>
                     </div>
 
                     <Tabs defaultValue="my-leave-records" className="w-full pt-4">
