@@ -1477,5 +1477,3 @@ export default function ManageCtoCocPage() {
       </div>
     );
 }
-
-    
