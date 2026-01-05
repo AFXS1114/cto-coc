@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -893,16 +892,18 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                         {employeeBalances.map((employee) => (
                              <Collapsible key={employee.employeeId} asChild>
                                 <>
-                                    <CollapsibleTrigger asChild>
-                                        <TableRow className="cursor-pointer">
-                                            <TableCell>
-                                                <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
-                                            </TableCell>
-                                            <TableCell>{employee.employeeId}</TableCell>
-                                            <TableCell>{employee.name}</TableCell>
-                                            <TableCell className="text-right font-medium">{(employee.totalHours).toFixed(2)}</TableCell>
-                                        </TableRow>
-                                    </CollapsibleTrigger>
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="p-0">
+                                            <CollapsibleTrigger asChild>
+                                                <div className="flex items-center cursor-pointer p-4">
+                                                    <ChevronDown className="h-4 w-4 transition-transform data-[state=open]:rotate-180" />
+                                                    <div className="w-1/4 pl-4">{employee.employeeId}</div>
+                                                    <div className="w-2/4">{employee.name}</div>
+                                                    <div className="w-1/4 text-right font-medium">{(employee.totalHours).toFixed(2)}</div>
+                                                </div>
+                                            </CollapsibleTrigger>
+                                        </TableCell>
+                                    </TableRow>
                                     <CollapsibleContent asChild>
                                         <TableRow>
                                             <TableCell colSpan={4} className="p-0">
@@ -1476,3 +1477,5 @@ export default function ManageCtoCocPage() {
       </div>
     );
 }
+
+    
