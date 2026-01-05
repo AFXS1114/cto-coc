@@ -12,7 +12,7 @@ import {
   X,
   ChevronsUpDown,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -47,7 +47,7 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -559,13 +559,36 @@ function PrintPreviewModal({ docId, open, onOpenChange }: { docId: string | null
     );
 }
 
-export default function LeaveCtoPage() {
+function LeaveCtoPageContent() {
+  const searchParams = useSearchParams();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const employeeDataString = searchParams.get('employee');
+    if (employeeDataString) {
+      try {
+        const employeeData = JSON.parse(decodeURIComponent(employeeDataString));
+        setSelectedEmployee(employeeData);
+      } catch (error) {
+        console.error("Failed to parse employee data from URL", error);
+      }
+    }
+  }, [searchParams]);
 
   const handleFormSubmit = (id: string) => {
     setPreviewDocId(id);
   };
+  
+  const handleBack = () => {
+      // If we came from the profile page, go back there. Otherwise, clear selection.
+      if (searchParams.get('employee')) {
+          router.push('/profile');
+      } else {
+          setSelectedEmployee(null);
+      }
+  }
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
@@ -576,7 +599,7 @@ export default function LeaveCtoPage() {
         ) : (
             <LeaveForm 
               employee={selectedEmployee} 
-              onBack={() => setSelectedEmployee(null)}
+              onBack={handleBack}
               onFormSubmit={handleFormSubmit} 
             />
         )}
@@ -590,4 +613,10 @@ export default function LeaveCtoPage() {
   );
 }
 
-    
+export default function LeaveCtoPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <LeaveCtoPageContent />
+        </Suspense>
+    )
+}

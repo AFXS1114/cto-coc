@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound, Printer, Pencil, Plus, Trash2, Clock } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound, Printer, Pencil, Plus, Trash2, Clock, FileWarning, FileCheck, FileX } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, DocumentData, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -537,12 +537,12 @@ function EditWanDialog({ wan, open, onOpenChange, onUpdateSuccess }: { wan: WanR
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4 max-h-[70vh] overflow-y-auto pr-6">
                          <FormField
                             control={form.control}
-                            name="wanCode"
+                            name="id"
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>WAN Code</FormLabel>
                                 <FormControl>
-                                <Input {...field} readOnly className="bg-muted" value={wan.id}/>
+                                <Input {...field} readOnly className="bg-muted" />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -975,12 +975,70 @@ function WanBalanceCard({ employee }: { employee: Employee }) {
                 {isLoading ? (
                     <Skeleton className="h-10 w-24" />
                 ) : (
-                    <h2 className="text-4xl font-bold tracking-tighter">
+                    <h2 className="text-4xl font-bold tracking-tighter font-sans">
                         {totalHours.toFixed(2)}
                     </h2>
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+function StatsCard({ employee }: { employee: Employee }) {
+    const firestore = useFirestore();
+
+    // Queries for filed leaves
+    const pendingQuery = useMemoFirebase(() => query(collection(firestore, 'to-process-leave'), where('name', '==', employee.name)), [firestore, employee.name]);
+    const approvedQuery = useMemoFirebase(() => query(collection(firestore, 'processed-cto'), where('name', '==', employee.name)), [firestore, employee.name]);
+    
+    // Query for rejected/cancelled leaves
+    const cancelledLeaveQuery = useMemoFirebase(() => query(collection(firestore, 'cancelled-cto'), where('name', '==', employee.name)), [firestore, employee.name]);
+    
+    // Queries for WANs
+    const filedWanQuery = useMemoFirebase(() => query(collection(firestore, 'filed-wan'), where('name', '==', employee.name)), [firestore, employee.name]);
+    const rejectedWanQuery = useMemoFirebase(() => query(collection(firestore, 'rejected-wan'), where('name', '==', employee.name)), [firestore, employee.name]);
+
+    const { data: pendingLeaves } = useCollection(pendingQuery);
+    const { data: approvedLeaves } = useCollection(approvedQuery);
+    const { data: cancelledLeaves } = useCollection(cancelledLeaveQuery);
+    const { data: filedWans } = useCollection(filedWanQuery);
+    const { data: rejectedWans } = useCollection(rejectedWanQuery);
+
+    const filedLeaveCount = (pendingLeaves?.length || 0) + (approvedLeaves?.length || 0);
+    const rejectedLeaveCount = cancelledLeaves?.length || 0;
+    const filedWanCount = filedWans?.length || 0;
+    const rejectedWanCount = rejectedWans?.length || 0;
+    
+    const stats = [
+        { icon: FileCheck, label: 'Filed Leave', value: filedLeaveCount },
+        { icon: FileCheck, label: 'Filed WAN', value: filedWanCount },
+        { icon: FileX, label: 'Rejected Leave', value: rejectedLeaveCount },
+        { icon: FileX, label: 'Rejected WAN', value: rejectedWanCount },
+    ];
+
+    return (
+         <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-muted-foreground mt-2">
+            <div className="flex items-center gap-2">
+                <FileCheck className="h-4 w-4 text-sky-600" />
+                <span>Filed Leave:</span>
+                <span className="font-semibold text-foreground">{String(filedLeaveCount).padStart(2, '0')}</span>
+            </div>
+             <div className="flex items-center gap-2">
+                <FileCheck className="h-4 w-4 text-sky-600" />
+                <span>Filed WAN:</span>
+                <span className="font-semibold text-foreground">{String(filedWanCount).padStart(2, '0')}</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <FileX className="h-4 w-4 text-red-600" />
+                <span>Rejected Leave:</span>
+                <span className="font-semibold text-foreground">{String(rejectedLeaveCount).padStart(2, '0')}</span>
+            </div>
+             <div className="flex items-center gap-2">
+                <FileX className="h-4 w-4 text-red-600" />
+                <span>Rejected WAN:</span>
+                <span className="font-semibold text-foreground">{String(rejectedWanCount).padStart(2, '0')}</span>
+            </div>
+        </div>
     )
 }
 
@@ -997,6 +1055,8 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
     const handlePrintClick = (wanId: string) => {
         setPreviewDocId(wanId);
     };
+
+    const employeeDataString = encodeURIComponent(JSON.stringify(employee));
 
     return (
         <>
@@ -1015,20 +1075,27 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                 <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="p-4 rounded-lg bg-muted/50 border md:col-span-2">
-                            <p className="flex items-center gap-2 mb-2"><User className="h-5 w-5 text-primary"/> <strong>Position:</strong> {employee.position}</p>
-                            <p className="flex items-center gap-2"><User className="h-5 w-5 text-primary"/> <strong>ID No:</strong> {employee.id}</p>
+                             <div className="flex items-center gap-2">
+                                <User className="h-5 w-5 text-primary"/>
+                                <strong>Position:</strong> {employee.position}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                                <User className="h-5 w-5 text-primary"/>
+                                <strong>ID No:</strong> {employee.id}
+                            </div>
+                            <StatsCard employee={employee} />
                         </div>
                         <WanBalanceCard employee={employee} />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                         <Button asChild className="w-full">
-                            <Link href="/leave-cto">
+                            <Link href={`/leave-cto?employee=${employeeDataString}`}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 File Leave/CTO
                             </Link>
                         </Button>
                         <Button asChild className="w-full">
-                            <Link href="/wan-coc">
+                            <Link href={`/wan-coc?employee=${employeeDataString}`}>
                                 <Globe className="mr-2 h-4 w-4" />
                                 File WAN/COC
                             </Link>

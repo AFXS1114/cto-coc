@@ -13,7 +13,7 @@ import {
   Trash2,
   Clock,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
@@ -572,8 +572,30 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
   );
 }
 
-export default function WanCocPage() {
+function WanCocPageContent() {
+  const searchParams = useSearchParams();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const employeeDataString = searchParams.get('employee');
+    if (employeeDataString) {
+      try {
+        const employeeData = JSON.parse(decodeURIComponent(employeeDataString));
+        setSelectedEmployee(employeeData);
+      } catch (error) {
+        console.error("Failed to parse employee data from URL", error);
+      }
+    }
+  }, [searchParams]);
+
+  const handleBack = () => {
+    if (searchParams.get('employee')) {
+        router.push('/profile');
+    } else {
+        setSelectedEmployee(null);
+    }
+  }
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center p-4 antialiased">
@@ -581,9 +603,17 @@ export default function WanCocPage() {
         {!selectedEmployee ? (
             <EmployeeSelector onEmployeeSelect={setSelectedEmployee} />
         ) : (
-            <WanCocForm employee={selectedEmployee} onBack={() => setSelectedEmployee(null)} />
+            <WanCocForm employee={selectedEmployee} onBack={handleBack} />
         )}
       </main>
     </div>
   );
+}
+
+export default function WanCocPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <WanCocPageContent />
+        </Suspense>
+    )
 }
