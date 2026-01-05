@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -51,7 +52,7 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, isSameDay } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -556,16 +557,16 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
     );
   }, [wanRequests, searchTerm]);
 
-  const handleReject = async (request: WanRequest) => {
-    if (!firestore || !remarks) return;
+  const handleReject = async (request: WanRequest, db: Firestore) => {
+    if (!db || !remarks) return;
 
     try {
-        const batch = writeBatch(firestore);
+        const batch = writeBatch(db);
 
-        const rejectedWanRef = doc(firestore, 'rejected-wan', request.id);
+        const rejectedWanRef = doc(db, 'rejected-wan', request.id);
         batch.set(rejectedWanRef, { ...request, status: 'rejected', remarks });
 
-        const filedWanRef = doc(firestore, 'filed-wan', request.id);
+        const filedWanRef = doc(db, 'filed-wan', request.id);
         batch.delete(filedWanRef);
 
         await batch.commit();
@@ -660,7 +661,7 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setRemarks('')}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleReject(request)} disabled={!remarks}>
+                        <AlertDialogAction onClick={() => handleReject(request, firestore)} disabled={!remarks}>
                           Confirm Reject
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -1477,4 +1478,5 @@ export default function ManageCtoCocPage() {
       </div>
     );
 }
+
 
