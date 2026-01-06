@@ -72,14 +72,14 @@ const leaveFormSchema = z.object({
   name: z.string().min(1, 'Name is required.'),
   dateOfFiling: z.date(),
   position: z.string(),
-  daysApplied: z.coerce.number().min(1, 'Please enter a valid number of days.'),
+  daysApplied: z.coerce.number().min(0.5, 'Minimum leave is 0.5 days.').refine(val => val % 0.5 === 0, 'Days must be in increments of 0.5.'),
   inclusiveDates: z.union([
     z.object({ from: z.date(), to: z.date().optional() }),
     z.array(z.date()),
     z.date(),
   ]).optional(),
 }).refine(data => {
-    if (data.daysApplied === 1) {
+    if (data.daysApplied === 0.5 || data.daysApplied === 1) {
         return data.inclusiveDates instanceof Date;
     }
     if (data.daysApplied > 1) {
@@ -400,7 +400,7 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
                   <FormItem>
                     <FormLabel>No. of Days Applied for</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} min="1" />
+                      <Input type="number" {...field} min="0.5" step="0.5" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -428,7 +428,7 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
                           selected={Array.isArray(field.value) ? field.value : []}
                           onSelect={(dates) => field.onChange(dates || [])}
                           initialFocus
-                          max={Number(daysApplied)}
+                          max={Math.floor(Number(daysApplied))}
                         />
                       </PopoverContent>
                     </Popover>
@@ -620,3 +620,5 @@ export default function LeaveCtoPage() {
         </Suspense>
     )
 }
+
+    

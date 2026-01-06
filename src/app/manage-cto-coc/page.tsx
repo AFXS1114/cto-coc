@@ -94,6 +94,7 @@ interface WanRequest extends DocumentData {
     totalHours: number;
     status?: 'available' | 'used' | 'rejected';
     remarks?: string;
+    sourceWanId?: string;
 }
 
 interface AppUser extends DocumentData {
@@ -177,6 +178,14 @@ function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'l
     );
 }
 
+function generateWanCode() {
+  const timestamp = Date.now();
+  const randomSuffix = Math.floor(Math.random() * 100);
+  const uniqueNumber = timestamp + randomSuffix;
+  const sequentialId = String(uniqueNumber).slice(-7);
+  return `WAN-${sequentialId.padStart(7, '0')}`;
+}
+
 function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveRequest, onOpenChange: (open: boolean) => void, open: boolean }) {
     const firestore = useFirestore();
     const { toast } = useToast();
@@ -241,21 +250,46 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
         try {
             const batch = writeBatch(firestore);
 
-            const newDocRef = doc(firestore, 'processed-cto', request.id);
-            batch.set(newDocRef, { 
+            const approvedLeaveData = { 
                 ...request, 
-                status: 'Approved',
+                status: 'Approved' as const,
                 attachedWanCodes: selectedWans.map(w => w.id),
                 totalHours: selectedHours
-            });
+            };
+            const newDocRef = doc(firestore, 'processed-cto', request.id);
+            batch.set(newDocRef, approvedLeaveData);
             
-            selectedWans.forEach(wan => {
+            let leftoverHours = selectedHours - requiredHours;
+
+            for (const wan of selectedWans) {
                 const usedWanRef = doc(firestore, 'used-wan', wan.id);
                 batch.set(usedWanRef, { ...wan, status: 'used' });
 
                 const filedWanRef = doc(firestore, 'filed-wan', wan.id);
                 batch.delete(filedWanRef);
-            });
+            }
+            
+            // Logic to create a new WAN for the leftover hours
+            if (leftoverHours > 0) {
+                const newWanCode = generateWanCode();
+                const newWanRef = doc(firestore, 'filed-wan', newWanCode);
+                
+                const originalWan = selectedWans[selectedWans.length - 1]; // Use last selected wan as a template
+
+                const newWanData: Omit<WanRequest, 'docId'> = {
+                    ...originalWan, // Copy fields like name, unitDivision etc.
+                    id: newWanCode,
+                    dateOfWan: format(new Date(), 'yyyy-MM-dd'), // Use today's date for the new credit
+                    totalHours: leftoverHours,
+                    status: 'available',
+                    sourceWanId: selectedWans.map(w => w.id).join(','), // Reference to all source WANs
+                    remarks: `Created as leftover from leave ${request.id}`,
+                    // Reset tasks and times as they don't apply to the leftover credit
+                    tasks: [{value: `Leftover credit from leave ${request.id}`}],
+                    inclusiveTimes: [],
+                };
+                batch.set(newWanRef, newWanData);
+            }
 
             const oldDocRef = doc(firestore, 'to-process-leave', request.id);
             batch.delete(oldDocRef);
@@ -301,6 +335,11 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                             <p className="text-2xl font-bold text-right">{selectedHours.toFixed(2)}</p>
                         </div>
                     </div>
+                     {selectedHours > requiredHours && (
+                        <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-200">
+                           A new WAN credit of <strong>{(selectedHours - requiredHours).toFixed(2)} hours</strong> will be generated and returned to the employee.
+                        </div>
+                    )}
                     
                     <p className="font-medium">Eligible WANs for {request.name}</p>
                     <ScrollArea className="h-64 border rounded-md">
@@ -607,7 +646,7 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
         </div>
       ) : filteredRequests.length === 0 ? (
         <p className="text-center text-muted-foreground py-4">
-          {wanRequests && wanRequests.length > 0 ? 'No matching requests found.' : 'No filed WAN requests found.'}
+          {wanRequests && wanRequests.filter(r => r.status === 'available').length > 0 ? 'No matching requests found.' : 'No filed WAN requests found.'}
         </p>
       ) : (
         <Table>
@@ -1480,3 +1519,5 @@ export default function ManageCtoCocPage() {
 }
 
 
+
+    

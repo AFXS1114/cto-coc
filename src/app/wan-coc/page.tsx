@@ -96,14 +96,10 @@ const wanCocFormSchema = z.object({
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
 
 function generateWanCode() {
-  // Generates a unique, time-based sequential ID.
-  // Using timestamp for the base ensures chronological order for codes generated ms apart.
-  // The random part helps prevent collisions if multiple users submit at the exact same millisecond.
-  const timestamp = Date.now(); // Milliseconds since epoch
-  const randomSuffix = Math.floor(Math.random() * 100); // A small random number
+  const timestamp = Date.now();
+  const randomSuffix = Math.floor(Math.random() * 100);
   const uniqueNumber = timestamp + randomSuffix;
-  const sequentialId = String(uniqueNumber).slice(-7); // Take the last 7 digits
-
+  const sequentialId = String(uniqueNumber).slice(-7);
   return `WAN-${sequentialId.padStart(7, '0')}`;
 }
 
@@ -620,5 +616,7 @@ export default function WanCocPage() {
         </Suspense>
     )
 }
+
+    
 
     
