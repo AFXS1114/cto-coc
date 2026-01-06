@@ -89,19 +89,22 @@ const wanCocFormSchema = z.object({
       type: z.enum(['select', 'custom']),
       value: z.string().min(1, "Please provide a task description.")
   })).min(1, "At least one task is required."),
-  totalHours: z.number(),
+  totalHours: z.number().min(4, "Minimum overtime is 4 hours."),
   status: z.string().default('available'),
 });
 
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
 
 function generateWanCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'WAN-';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+  // Generates a unique, time-based sequential ID.
+  // Using timestamp for the base ensures chronological order for codes generated ms apart.
+  // The random part helps prevent collisions if multiple users submit at the exact same millisecond.
+  const timestamp = Date.now(); // Milliseconds since epoch
+  const randomSuffix = Math.floor(Math.random() * 100); // A small random number
+  const uniqueNumber = timestamp + randomSuffix;
+  const sequentialId = String(uniqueNumber).slice(-7); // Take the last 7 digits
+
+  return `WAN-${sequentialId.padStart(7, '0')}`;
 }
 
 function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: Employee) => void }) {
@@ -617,3 +620,5 @@ export default function WanCocPage() {
         </Suspense>
     )
 }
+
+    

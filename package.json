@@ -48,7 +48,7 @@
     "jspdf": "^2.5.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
-    "next": "15.5.7",
+    "next": "15.5.9",
     "patch-package": "^8.0.0",
     "react": "19.0.0-rc-f994737d-20240522",
     "react-day-picker": "^8.10.1",
