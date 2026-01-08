@@ -77,7 +77,7 @@ const taskOptions = [
 ];
 
 const wanCocFormSchema = z.object({
-  wanCode: z.string(),
+  wanCode: z.string().optional(),
   name: z.string().min(1, 'Name is required.'),
   dateOfWan: z.date(),
   unitDivision: z.string(),
@@ -95,12 +95,10 @@ const wanCocFormSchema = z.object({
 
 type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
 
-function generateWanCode() {
-  const timestamp = Date.now();
-  const randomSuffix = Math.floor(Math.random() * 100);
-  const uniqueNumber = timestamp + randomSuffix;
-  const sequentialId = String(uniqueNumber).slice(-7);
-  return `WAN-${sequentialId.padStart(7, '0')}`;
+function generateWanCode(wanDate: Date) {
+  const datePart = format(wanDate, 'yyMMdd');
+  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `WAN-${datePart}-${randomPart}`;
 }
 
 function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: Employee) => void }) {
@@ -188,14 +186,9 @@ function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: E
 
 function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => void }) {
   const { toast } = useToast();
-  const [wanCode, setWanCode] = useState('');
   const [totalHours, setTotalHours] = useState(0);
   const firestore = useFirestore();
   const router = useRouter();
-
-  useEffect(() => {
-    setWanCode(generateWanCode());
-  }, []);
 
   const form = useForm<WanCocFormValues>({
     resolver: zodResolver(wanCocFormSchema),
@@ -274,11 +267,6 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
     calculateTotalHours();
   }, [inclusiveTimes, form]);
 
-  useEffect(() => {
-    if (wanCode) {
-      form.setValue('wanCode', wanCode);
-    }
-  }, [wanCode, form]);
 
   useEffect(() => {
     if(employee) {
@@ -287,9 +275,12 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
   }, [employee, form]);
 
   function onSubmit(data: WanCocFormValues) {
+    const newWanCode = generateWanCode(data.dateOfWan);
+
     const submissionData = {
-        id: data.wanCode,
         ...data,
+        id: newWanCode,
+        wanCode: newWanCode,
         dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
         // We only need the value for the database
         tasks: data.tasks.map(task => ({ value: task.value })),
@@ -308,7 +299,7 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
 
     toast({
       title: 'WAN Filed Successfully!',
-      description: `Your WAN request (${data.wanCode}) has been submitted.`,
+      description: `Your WAN request (${newWanCode}) has been submitted.`,
     });
     
     onBack();
@@ -332,7 +323,7 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
                   <FormItem>
                     <FormLabel>WAN Code</FormLabel>
                     <FormControl>
-                      <Input {...field} readOnly className="bg-muted" />
+                      <Input {...field} readOnly placeholder="Generated on submission" className="bg-muted" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -616,7 +607,3 @@ export default function WanCocPage() {
         </Suspense>
     )
 }
-
-    
-
-    

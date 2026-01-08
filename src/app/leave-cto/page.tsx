@@ -67,7 +67,7 @@ interface Employee {
 }
 
 const leaveFormSchema = z.object({
-  leaveCode: z.string(),
+  leaveCode: z.string().optional(),
   officeAgency: z.string(),
   name: z.string().min(1, 'Name is required.'),
   dateOfFiling: z.date(),
@@ -94,13 +94,10 @@ const leaveFormSchema = z.object({
 
 type LeaveFormValues = z.infer<typeof leaveFormSchema>;
 
-function generateLeaveCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'CTO-';
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+function generateLeaveCode(filingDate: Date) {
+  const datePart = format(filingDate, 'yyMMdd');
+  const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `CTO-${datePart}-${randomPart}`;
 }
 
 function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: Employee) => void }) {
@@ -182,13 +179,8 @@ function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: E
 
 function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onBack: () => void, onFormSubmit: (id: string) => void }) {
   const { toast } = useToast();
-  const [leaveCode, setLeaveCode] = useState('');
   const firestore = useFirestore();
   const router = useRouter();
-
-  useEffect(() => {
-    setLeaveCode(generateLeaveCode());
-  }, []);
 
   const form = useForm<LeaveFormValues>({
     resolver: zodResolver(leaveFormSchema),
@@ -214,12 +206,6 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
 
 
   useEffect(() => {
-    if (leaveCode) {
-      form.setValue('leaveCode', leaveCode);
-    }
-  }, [leaveCode, form]);
-
-  useEffect(() => {
     if(employee) {
         form.setValue('name', employee.name);
         form.setValue('position', employee.position);
@@ -227,6 +213,8 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
   }, [employee, form]);
 
   function onSubmit(data: LeaveFormValues) {
+    const newLeaveCode = generateLeaveCode(data.dateOfFiling);
+
     let inclusiveDatesFormatted;
     if (data.inclusiveDates instanceof Date) {
         inclusiveDatesFormatted = format(data.inclusiveDates, 'yyyy-MM-dd');
@@ -255,7 +243,9 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
 
 
     const submissionData = {
-        id: data.leaveCode,
+        ...data,
+        id: newLeaveCode,
+        leaveCode: newLeaveCode,
         requestType: 'Leave',
         submittedDate: format(new Date(), 'yyyy-MM-dd'),
         startDate: getStartDate(),
@@ -263,7 +253,6 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
         reason: 'N/A', // Not in form, but in schema
         status: 'Pending',
         userId: 'temp-user-id', // Placeholder, will be replaced with auth user
-        ...data,
         dateOfFiling: format(data.dateOfFiling, 'yyyy-MM-dd'),
         inclusiveDates: inclusiveDatesFormatted,
         daysApplied: data.daysApplied,
@@ -276,9 +265,9 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
     
     toast({
         title: 'Leave Filed Successfully!',
-        description: `Your leave request (${data.leaveCode}) has been submitted.`,
+        description: `Your leave request (${newLeaveCode}) has been submitted.`,
         action: (
-          <ToastAction altText="View Form" onClick={() => onFormSubmit(data.leaveCode)}>
+          <ToastAction altText="View Form" onClick={() => onFormSubmit(newLeaveCode)}>
             View Form
           </ToastAction>
         ),
@@ -307,7 +296,7 @@ function LeaveForm({ employee, onBack, onFormSubmit }: { employee: Employee, onB
                   <FormItem>
                     <FormLabel>Leave Code</FormLabel>
                     <FormControl>
-                      <Input {...field} readOnly className="bg-muted" />
+                      <Input {...field} readOnly placeholder="Generated on submission" className="bg-muted" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -620,5 +609,3 @@ export default function LeaveCtoPage() {
         </Suspense>
     )
 }
-
-    
