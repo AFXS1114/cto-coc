@@ -274,17 +274,16 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                 const newWanCode = generateWanCode();
                 const newWanRef = doc(firestore, 'filed-wan', newWanCode);
                 
-                const originalWan = selectedWans[selectedWans.length - 1]; // Use last selected wan as a template
+                const originalWan = selectedWans[selectedWans.length - 1]; 
 
                 const newWanData: Omit<WanRequest, 'docId'> = {
-                    ...originalWan, // Copy fields like name, unitDivision etc.
+                    ...originalWan,
                     id: newWanCode,
-                    dateOfWan: format(new Date(), 'yyyy-MM-dd'), // Use today's date for the new credit
+                    dateOfWan: originalWan.dateOfWan,
                     totalHours: leftoverHours,
                     status: 'available',
-                    sourceWanId: selectedWans.map(w => w.id).join(','), // Reference to all source WANs
+                    sourceWanId: selectedWans.map(w => w.id).join(','), 
                     remarks: `Created as leftover from leave ${request.id}`,
-                    // Reset tasks and times as they don't apply to the leftover credit
                     tasks: [{value: `Leftover credit from leave ${request.id}`}],
                     inclusiveTimes: [],
                 };
@@ -1517,7 +1516,3 @@ export default function ManageCtoCocPage() {
       </div>
     );
 }
-
-
-
-    

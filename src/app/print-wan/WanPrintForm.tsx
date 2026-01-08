@@ -57,7 +57,7 @@ const SingleWanCopy = ({ wanData }: { wanData: WanRequest }) => {
                         <td className="border border-black p-1 w-1/2">Unit/Division: <br/><strong className="font-serif-print text-sm uppercase">{wanData.unitDivision}</strong></td>
                     </tr>
                     <tr>
-                        <td className="border border-black p-1">Date/Day: <br/><strong className="font-serif-print text-sm">{format(new Date(wanData.dateOfWan), 'MMMM d, yyyy')}</strong></td>
+                        <td className="border border-black p-1">Date/Day: <br/><strong className="font-serif-print text-sm">{format(new Date(wanData.dateOfWan), 'EEEE, MMMM d, yyyy')}</strong></td>
                         <td className="border border-black p-1">Inclusive Period/Time: <br/><strong className="font-serif-print text-sm">{formatInclusiveTime(wanData.inclusiveTimes)}</strong></td>
                     </tr>
                 </tbody>
