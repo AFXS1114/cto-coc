@@ -73,10 +73,18 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Employee extends DocumentData {
   id: string;
   name: string;
+  employmentType: string;
   position: string;
 }
 
@@ -94,6 +102,7 @@ interface EmployeeWithCategory extends Employee {
 const editEmployeeFormSchema = z.object({
   id: z.string(),
   name: z.string().min(1, 'Name is required.'),
+  employmentType: z.string().min(1, 'Employment Type is required.'),
   position: z.string().min(1, 'Position is required.'),
 });
 
@@ -123,6 +132,7 @@ function EditEmployeeModal({
         id: employee.id,
         name: employee.name,
         position: employee.position,
+        employmentType: employee.employmentType,
       });
     }
   }, [employee, form]);
@@ -132,7 +142,7 @@ function EditEmployeeModal({
     
     try {
         const employeeRef = doc(firestore, 'employees', employee.id);
-        await setDoc(employeeRef, { name: data.name, position: data.position }, { merge: true });
+        await setDoc(employeeRef, { name: data.name, position: data.position, employmentType: data.employmentType }, { merge: true });
         
         toast({
             title: 'Employee Updated',
@@ -187,6 +197,27 @@ function EditEmployeeModal({
                   <FormMessage />
                 </FormItem>
               )}
+            />
+            <FormField
+                control={form.control}
+                name="employmentType"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Employment Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select employment type" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                        <SelectItem value="Organic">Organic</SelectItem>
+                        <SelectItem value="Job Order">Job Order</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>
+                )}
             />
              <FormField
               control={form.control}
@@ -486,5 +517,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
