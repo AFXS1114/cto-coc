@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, getDocs, collection, query, where, DocumentData } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -126,12 +127,17 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
 
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '20px', lineHeight: '1.2' }}>
-                <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
-                <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
-                <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
-                <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
-                <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '20px' }}>
+                <div style={{ position: 'absolute', left: 0 }}>
+                    <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
+                </div>
+                <div style={{ textAlign: 'center', lineHeight: '1.2' }}>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
+                </div>
             </div>
             
             <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '5px' }}>
