@@ -210,6 +210,11 @@
           "type": "string",
           "description": "Full name of the employee."
         },
+        "employmentType": {
+          "type": "string",
+          "description": "The type of employment.",
+          "enum": ["Organic", "Job Order"]
+        },
         "position": {
           "type": "string",
           "description": "Position of the employee."
@@ -218,6 +223,7 @@
       "required": [
         "id",
         "name",
+        "employmentType",
         "position"
       ]
     },

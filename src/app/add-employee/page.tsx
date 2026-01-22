@@ -18,6 +18,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore } from '@/firebase';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
@@ -26,6 +33,7 @@ import { collection } from 'firebase/firestore';
 const employeeFormSchema = z.object({
   id: z.string().regex(/^\d{4}-\d{2}$/, 'ID No. must be in the format ####-##.'),
   name: z.string().min(1, 'Name is required.'),
+  employmentType: z.string().min(1, 'Please select an employment type.'),
   position: z.string(),
 });
 
@@ -40,6 +48,7 @@ function EmployeeForm() {
     defaultValues: {
       id: '',
       name: '',
+      employmentType: '',
       position: 'Administrative Aide IV',
     },
   });
@@ -87,6 +96,27 @@ function EmployeeForm() {
         />
         <FormField
           control={form.control}
+          name="employmentType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Employment Type</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select employment type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Organic">Organic</SelectItem>
+                  <SelectItem value="Job Order">Job Order</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
           name="position"
           render={({ field }) => (
             <FormItem>
@@ -127,3 +157,5 @@ export default function AddEmployeePage() {
     </div>
   );
 }
+
+    
