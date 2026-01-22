@@ -20,6 +20,7 @@ import {
   Pencil,
   Trash2,
   Loader2,
+  ClipboardList,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
@@ -421,6 +422,13 @@ function SettingsNavbar() {
         >
           <Users className="h-5 w-5" />
           <span>Add App User</span>
+        </Link>
+        <Link
+          href="/forms"
+          className="flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors font-medium"
+        >
+          <ClipboardList className="h-5 w-5" />
+          <span>Forms</span>
         </Link>
       </div>
        <Button asChild variant="outline">
