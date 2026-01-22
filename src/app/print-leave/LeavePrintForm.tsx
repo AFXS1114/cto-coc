@@ -90,7 +90,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                     });
                 } else {
                      const allAvailableWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
-                     const wanDocs = await getDocs(allAvailableWansQuery);
+                     const wanDocs = await getDocs(wanQuery);
                      wanDocs.forEach(doc => {
                          totalEarned += doc.data().totalHours || 0;
                      });
@@ -127,10 +127,8 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
 
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '20px' }}>
-                <div style={{ position: 'absolute', left: 0 }}>
-                    <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2rem', marginBottom: '20px' }}>
+                <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
                 <div style={{ textAlign: 'center', lineHeight: '1.2' }}>
                     <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
                     <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
