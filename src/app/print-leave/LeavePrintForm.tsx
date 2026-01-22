@@ -141,34 +141,24 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                 Code: {leaveData.id}
             </div>
 
-            {/* Header Table */}
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: '"Times New Roman", Times, serif', fontSize: '13px', tableLayout: 'fixed' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: '"Times New Roman", Times, serif', fontSize: '12px' }}>
                 <tbody>
                     <tr>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>1. OFFICE / AGENCY</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.officeAgency || 'PFDA-BFPC'}</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>2. NAME (Last, First, M.I.)</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>
-                           {leaveData.name}
-                        </td>
+                        <td style={{border: '1px solid black', padding: '4px', width: '25%'}}>1. OFFICE / AGENCY <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{leaveData.officeAgency || 'PFDA-BFPC'}</strong></td>
+                        <td colSpan={2} style={{border: '1px solid black', padding: '4px', width: '75%'}}>2. NAME (Last, First, M.I.) <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{leaveData.name}</strong></td>
                     </tr>
-                    <tr>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>3. DATE OF FILING</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>4. POSITION</td>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#fff32b', fontWeight: 'bold', textAlign: 'center'}}>{leaveData.position}</td>
-                    </tr>
-                    <tr>
-                        <td style={{border: '1px solid black', padding: '4px 6px', verticalAlign: 'middle', background: '#f5f5f5', fontWeight: 'bold', fontSize: '12px', textTransform: 'uppercase'}}>5. MONTHLY SALARY</td>
-                        <td colSpan={3} style={{border: '1px solid black', padding: '4px', height: '22px'}}></td>
+                     <tr>
+                        <td style={{border: '1px solid black', padding: '4px'}}>3. DATE OF FILING <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</strong></td>
+                        <td style={{border: '1px solid black', padding: '4px'}}>4. POSITION <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{leaveData.position}</strong></td>
+                        <td style={{border: '1px solid black', padding: '4px'}}>5. MONTHLY SALARY <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>&nbsp;</strong></td>
                     </tr>
                 </tbody>
             </table>
 
             {/* Section 6 */}
-            <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '5px'}}>
+            <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '0px'}}>
                 <tbody>
-                    <tr><td colSpan={2} style={{textAlign: 'center', fontWeight: 'bold', background: '#f0f0f0', padding: '4px', border: '1px solid black'}}>6. DETAILS OF APPLICATION</td></tr>
+                    <tr><td colSpan={2} style={{textAlign: 'center', fontWeight: 'bold', padding: '4px', border: '1px solid black', borderTop: 'none'}}>6. DETAILS OF APPLICATION</td></tr>
                     <tr>
                         <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black'}}>
                             <strong style={{fontSize: '11px'}}>6(a) TYPE OF LEAVE TO BE AVAILED OF</strong>
@@ -216,13 +206,13 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                     </tr>
                     <tr>
                         <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
-                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(c) NUMBER OF DAYS APPLIED FOR</div>
+                            <div style={{ padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(c) NUMBER OF DAYS APPLIED FOR</div>
                             <div style={{paddingTop: '8px', paddingBottom: '8px', fontWeight: 'bold'}}>{leaveData.daysApplied} day(s)</div>
-                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>INCLUSIVE DATES</div>
+                            <div style={{ padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>INCLUSIVE DATES</div>
                             <div style={{paddingTop: '8px', paddingBottom: '8px'}}>{formatDateRange(leaveData.inclusiveDates)}</div>
                         </td>
                         <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
-                            <div style={{background: '#fff32b', padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(d) COMMUTATION</div>
+                            <div style={{ padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(d) COMMUTATION</div>
                             <div style={{paddingTop: '8px', paddingLeft: '15px', textAlign: 'left'}}>
                                 <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px'}}></span>Requested<br/>
                                 <span style={{display: 'inline-block', width: '10px', height: '10px', border: '1px solid black', marginRight: '4px', background: 'white'}}></span>Not Requested
@@ -238,7 +228,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
              {/* Section 7 */}
             <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '5px'}}>
                 <tbody>
-                    <tr><td colSpan={2} style={{textAlign: 'center', fontWeight: 'bold', background: '#f0f0f0', padding: '4px', border: '1px solid black'}}>7. DETAILS OF ACTION ON APPLICATION</td></tr>
+                    <tr><td colSpan={2} style={{textAlign: 'center', fontWeight: 'bold', padding: '4px', border: '1px solid black'}}>7. DETAILS OF ACTION ON APPLICATION</td></tr>
                     <tr>
                         <td style={{width: '50%', padding: '8px', verticalAlign: 'top', border: '1px solid black'}}>
                              <strong style={{fontSize: '11px'}}>7(a) CERTIFICATION OF LEAVE CREDITS</strong>
