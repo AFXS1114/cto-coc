@@ -339,6 +339,7 @@ function EmployeesTable() {
               <TableHead>ID No.</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Position</TableHead>
+              <TableHead>Access</TableHead>
               <TableHead>Category</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -346,7 +347,7 @@ function EmployeesTable() {
           <TableBody>
             {employeesWithCategory.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   No employees found.
                 </TableCell>
               </TableRow>
@@ -357,6 +358,7 @@ function EmployeesTable() {
                   <TableCell>{employee.name}</TableCell>
                   <TableCell>{employee.position}</TableCell>
                   <TableCell>{employee.category}</TableCell>
+                  <TableCell>{employee.employmentType}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
                       <Pencil className="h-4 w-4" />
