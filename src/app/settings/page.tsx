@@ -360,7 +360,7 @@ function EmployeesTable() {
                   <TableCell>{employee.category}</TableCell>
                   <TableCell>{employee.employmentType}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)} disabled>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
