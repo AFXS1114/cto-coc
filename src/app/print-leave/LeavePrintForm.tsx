@@ -90,7 +90,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                     });
                 } else {
                      const allAvailableWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
-                     const wanDocs = await getDocs(wanQuery);
+                     const wanDocs = await getDocs(allAvailableWansQuery);
                      wanDocs.forEach(doc => {
                          totalEarned += doc.data().totalHours || 0;
                      });
