@@ -34,7 +34,7 @@ const employeeFormSchema = z.object({
   id: z.string().regex(/^\d{4}-\d{2}$/, 'ID No. must be in the format ####-##.'),
   name: z.string().min(1, 'Name is required.'),
   employmentType: z.string().min(1, 'Please select an employment type.'),
-  position: z.string(),
+  position: z.string().min(1, 'Position is required.'),
 });
 
 type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
@@ -49,7 +49,7 @@ function EmployeeForm() {
       id: '',
       name: '',
       employmentType: '',
-      position: 'Administrative Aide IV',
+      position: '',
     },
   });
 
@@ -122,7 +122,7 @@ function EmployeeForm() {
             <FormItem>
               <FormLabel>Position</FormLabel>
               <FormControl>
-                <Input {...field} readOnly className="bg-muted" />
+                <Input placeholder="Enter position" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -157,5 +157,3 @@ export default function AddEmployeePage() {
     </div>
   );
 }
-
-    
