@@ -67,15 +67,18 @@ const LeaveFormTemplate = () => {
     const lessThisApplicationHours = mockLeaveData.daysApplied * 8;
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px', border: '1px solid #ccc' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2rem', marginBottom: '20px' }}>
-                <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
-                <div style={{ textAlign: 'center', lineHeight: '1.2' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: '20px' }}>
+                <div style={{ justifySelf: 'end', paddingRight: '20px' }}>
+                    <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
+                </div>
+                <div style={{ lineHeight: '1.2', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
                     <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
                     <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
                     <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
                     <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
                 </div>
+                <div></div>
             </div>
             
             <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '5px' }}>
