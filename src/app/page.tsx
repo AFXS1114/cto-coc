@@ -1,6 +1,6 @@
 
 import Link from 'next/link';
-import { FileText, Globe, ArrowRight, BookUser, Settings, User } from 'lucide-react';
+import { FileText, Globe, ArrowRight, BookUser, Settings, User, HeartPulse } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -27,7 +27,7 @@ export default function Home() {
           Sa totoo lang wara ako maisip na page title ^_^
           </p>
         </div>
-        <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid w-full max-w-5xl grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           <Link href="/profile" className="group">
             <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
               <CardHeader>
@@ -57,6 +57,24 @@ export default function Home() {
               <CardContent>
                 <CardDescription>
                   Didi tabi ma file CTO or Leave.
+                </CardDescription>
+                <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
+                  Go to form <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/wellness-leave" className="group">
+            <Card className="h-full transform-gpu transition-all duration-300 ease-in-out hover:-translate-y-2 hover:shadow-2xl hover:shadow-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-xl font-headline">
+                  <HeartPulse className="h-7 w-7 text-primary" />
+                  Wellness Leave
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription>
+                  Didi tabi ma file san Wellness Leave (5 days per year).
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:underline">
                   Go to form <ArrowRight className="ml-2 h-4 w-4" />
