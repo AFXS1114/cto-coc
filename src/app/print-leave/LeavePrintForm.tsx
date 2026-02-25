@@ -21,11 +21,6 @@ interface LeaveRequest extends DocumentData {
     status?: string;
 }
 
-interface WanData {
-    id: string;
-    totalHours: number;
-}
-
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string | undefined) => {
     if (!dates) return 'N/A';
     if (typeof dates === 'string') {
@@ -128,15 +123,16 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: '20px' }}>
-                <div style={{ justifySelf: 'end', paddingRight: '20px' }}>
+                <div></div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
                     <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
-                </div>
-                <div style={{ lineHeight: '1.2', textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
-                    <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
-                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
-                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
-                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
+                    <div style={{ lineHeight: '1.2', textAlign: 'center' }}>
+                        <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
+                        <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
+                        <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
+                        <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
+                        <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
+                    </div>
                 </div>
                 <div></div>
             </div>
