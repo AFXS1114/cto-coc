@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
@@ -50,7 +49,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown, HeartPulse, FileText } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -85,6 +84,7 @@ interface LeaveRequest extends DocumentData {
   remarks?: string;
   totalHours?: number;
   startDate: string;
+  requestType?: 'Leave' | 'Wellness';
 }
 
 interface WanRequest extends DocumentData {
@@ -149,7 +149,6 @@ function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'l
             document.body.innerHTML = printContent.innerHTML;
             window.print();
             document.body.innerHTML = originalContents;
-            // We need to reload to re-attach React listeners
             window.location.reload();
         }
     }
@@ -269,14 +268,13 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                 batch.delete(filedWanRef);
             }
             
-            // Logic to create a new WAN for the leftover hours
             if (leftoverHours > 0) {
                 const newWanCode = generateWanCode();
                 const newWanRef = doc(firestore, 'filed-wan', newWanCode);
                 
                 const originalWan = selectedWans[selectedWans.length - 1]; 
 
-                const newWanData: Omit<WanRequest, 'docId'> = {
+                const newWanData = {
                     ...originalWan,
                     id: newWanCode,
                     dateOfWan: originalWan.dateOfWan,
@@ -391,6 +389,8 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
     const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+    const [wellnessToApprove, setWellnessToApprove] = useState<LeaveRequest | null>(null);
+    const [isApprovingWellness, setIsApprovingWellness] = useState(false);
   
     const filteredRequests = useMemo(() => {
       if (!pendingRequests) return [];
@@ -437,6 +437,38 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
           description: 'Failed to cancel leave request.'
         });
       }
+    };
+
+    const handleApproveWellness = async () => {
+        if (!firestore || !wellnessToApprove) return;
+        setIsApprovingWellness(true);
+        try {
+            const batch = writeBatch(firestore);
+            const approvedData = { ...wellnessToApprove, status: 'Approved' as const };
+            
+            const newDocRef = doc(firestore, 'processed-cto', wellnessToApprove.id);
+            batch.set(newDocRef, approvedData);
+
+            const oldDocRef = doc(firestore, 'to-process-leave', wellnessToApprove.id);
+            batch.delete(oldDocRef);
+
+            await batch.commit();
+
+            toast({
+                title: 'Wellness Leave Approved',
+                description: `The wellness leave for ${wellnessToApprove.name} has been approved.`
+            });
+            setWellnessToApprove(null);
+        } catch (error) {
+            console.error('Error approving wellness leave:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to approve wellness leave.'
+            });
+        } finally {
+            setIsApprovingWellness(false);
+        }
     };
   
     return (
@@ -501,7 +533,8 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Leave Code</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Code</TableHead>
                 <TableHead>Employee Name</TableHead>
                 <TableHead>Date Filed</TableHead>
                 <TableHead>No. of Days</TableHead>
@@ -512,14 +545,38 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
             <TableBody>
               {filteredRequests.map((request) => (
                 <TableRow key={request.id}>
-                  <TableCell className="font-mono">{request.id}</TableCell>
+                  <TableCell>
+                    {request.requestType === 'Wellness' ? (
+                        <Badge variant="outline" className="flex items-center gap-1 w-fit border-primary/30 text-primary">
+                            <HeartPulse className="h-3 w-3" />
+                            WL
+                        </Badge>
+                    ) : (
+                        <Badge variant="outline" className="flex items-center gap-1 w-fit border-sky-300 text-sky-700">
+                            <FileText className="h-3 w-3" />
+                            CTO
+                        </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{request.id}</TableCell>
                   <TableCell>{request.name}</TableCell>
                   <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                   <TableCell>{request.daysApplied}</TableCell>
                   <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
                   <TableCell className="text-right space-x-1">
                     
-                    <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" onClick={() => setSelectedRequest(request)}>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-green-600 hover:text-green-700" 
+                        onClick={() => {
+                            if (request.requestType === 'Wellness') {
+                                setWellnessToApprove(request);
+                            } else {
+                                setSelectedRequest(request);
+                            }
+                        }}
+                    >
                       <CheckCircle className="h-5 w-5" />
                     </Button>
                     
@@ -574,6 +631,24 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
             request={selectedRequest}
           />
         )}
+        
+        <AlertDialog open={!!wellnessToApprove} onOpenChange={(open) => !open && setWellnessToApprove(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Approve Wellness Leave?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        You are about to approve the Wellness Leave for <strong>{wellnessToApprove?.name}</strong> for {wellnessToApprove?.daysApplied} day(s). 
+                        No COC hours will be deducted for this type of request.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleApproveWellness} disabled={isApprovingWellness}>
+                        {isApprovingWellness ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Approval"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
       </>
     );
   }
@@ -751,7 +826,8 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Leave Code</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Code</TableHead>
                                 <TableHead>Employee Name</TableHead>
                                 <TableHead>Date Filed</TableHead>
                                 <TableHead>Attached WANs</TableHead>
@@ -761,10 +837,19 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                         <TableBody>
                             {filteredApproved.map((request) => (
                                 <TableRow key={request.id}>
-                                    <TableCell className="font-mono">{request.id}</TableCell>
+                                    <TableCell>
+                                        {request.requestType === 'Wellness' ? (
+                                            <Badge variant="outline" className="text-primary border-primary/30">WL</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-sky-700 border-sky-300">CTO</Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs">{request.id}</TableCell>
                                     <TableCell>{request.name}</TableCell>
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
-                                    <TableCell className="font-mono text-xs">{request.attachedWanCodes?.join(', ') || 'N/A'}</TableCell>
+                                    <TableCell className="font-mono text-[10px] max-w-[200px] truncate">
+                                        {request.requestType === 'Wellness' ? 'N/A' : (request.attachedWanCodes?.join(', ') || 'N/A')}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
                                             <Printer className="h-5 w-5" />
@@ -782,7 +867,8 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Leave Code</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Code</TableHead>
                                 <TableHead>Employee Name</TableHead>
                                 <TableHead>Date Filed</TableHead>
                                 <TableHead>Remarks</TableHead>
@@ -791,7 +877,14 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                         <TableBody>
                             {filteredCancelled.map((request) => (
                                 <TableRow key={request.id}>
-                                    <TableCell className="font-mono">{request.id}</TableCell>
+                                    <TableCell>
+                                        {request.requestType === 'Wellness' ? (
+                                            <Badge variant="outline" className="text-primary border-primary/30">WL</Badge>
+                                        ) : (
+                                            <Badge variant="outline" className="text-sky-700 border-sky-300">CTO</Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs">{request.id}</TableCell>
                                     <TableCell>{request.name}</TableCell>
                                     <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
                                     <TableCell>{request.remarks || 'N/A'}</TableCell>
@@ -1027,7 +1120,6 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
         const wanDocsToExport = wanRequests?.filter(wan => selectedWans.includes(wan.id)) || [];
 
         if (wanDocsToExport.length === 1) {
-            // Single file download
             const wan = wanDocsToExport[0];
             const wanFormElement = document.getElementById(`wan-form-to-export-${wan.id}`);
             if (wanFormElement) {
@@ -1041,7 +1133,6 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                 pdf.save(getFileName(wan));
             }
         } else {
-            // Multiple files zip download
             const zip = new JSZip();
             for (const wan of wanDocsToExport) {
                 const wanFormElement = document.getElementById(`wan-form-to-export-${wan.id}`);
@@ -1147,7 +1238,6 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                     </TableBody>
                 </Table>
             )}
-            {/* Hidden area for rendering forms to be captured */}
             <div ref={printAreaRef} style={{ position: 'absolute', left: '-9999px', top: 0, zIndex: -10 }}>
                 {wanRequests?.map(wan => {
                     if (!wan) return null;
