@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   Clock,
+  Printer,
 } from 'lucide-react';
 import React, { useState, useEffect, Suspense } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
@@ -49,6 +50,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { ToastAction } from '@/components/ui/toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import WanPrintForm from '../print-wan/WanPrintForm';
 
 interface Employee {
     id: string;
@@ -184,7 +195,7 @@ function EmployeeSelector({ onEmployeeSelect }: { onEmployeeSelect: (employee: E
 }
 
 
-function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => void }) {
+function WanCocForm({ employee, onBack, onFormSubmit }: { employee: Employee, onBack: () => void, onFormSubmit: (id: string) => void }) {
   const { toast } = useToast();
   const [totalHours, setTotalHours] = useState(0);
   const firestore = useFirestore();
@@ -300,6 +311,11 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
     toast({
       title: 'WAN Filed Successfully!',
       description: `Your WAN request (${newWanCode}) has been submitted.`,
+      action: (
+        <ToastAction altText="View Form" onClick={() => onFormSubmit(newWanCode)}>
+          View Form
+        </ToastAction>
+      ),
     });
     
     onBack();
@@ -562,9 +578,44 @@ function WanCocForm({ employee, onBack }: { employee: Employee, onBack: () => vo
   );
 }
 
+function PrintPreviewModal({ docId, open, onOpenChange }: { docId: string | null, open: boolean, onOpenChange: (open: boolean) => void }) {
+    if (!docId) return null;
+
+    const handlePrint = () => {
+        const printContent = document.getElementById('print-content');
+        if (printContent) {
+            const originalContents = document.body.innerHTML;
+            document.body.innerHTML = printContent.innerHTML;
+            window.print();
+            document.body.innerHTML = originalContents;
+            window.location.reload();
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-4xl h-[90vh]">
+                <DialogHeader>
+                    <DialogTitle>Print Preview: {docId}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="h-full">
+                    <div id="print-content">
+                        <WanPrintForm wanId={docId} />
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+                    <Button onClick={handlePrint}><Printer className="mr-2 h-4 w-4"/> Print</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function WanCocPageContent() {
   const searchParams = useSearchParams();
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -578,6 +629,10 @@ function WanCocPageContent() {
       }
     }
   }, [searchParams]);
+
+  const handleFormSubmit = (id: string) => {
+    setPreviewDocId(id);
+  };
 
   const handleBack = () => {
     if (searchParams.get('employee')) {
@@ -593,9 +648,18 @@ function WanCocPageContent() {
         {!selectedEmployee ? (
             <EmployeeSelector onEmployeeSelect={setSelectedEmployee} />
         ) : (
-            <WanCocForm employee={selectedEmployee} onBack={handleBack} />
+            <WanCocForm 
+              employee={selectedEmployee} 
+              onBack={handleBack} 
+              onFormSubmit={handleFormSubmit}
+            />
         )}
       </main>
+      <PrintPreviewModal 
+        docId={previewDocId}
+        open={!!previewDocId}
+        onOpenChange={(isOpen) => { if (!isOpen) setPreviewDocId(null) }}
+      />
     </div>
   );
 }
