@@ -53,7 +53,7 @@ import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff,
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, isValid } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -109,32 +109,27 @@ interface Employee {
   name: string;
 }
 
+const formatDateSafe = (dateString: string | undefined, formatStr: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (!isValid(date)) return dateString;
+    return format(date, formatStr);
+}
+
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string) => {
     if (typeof dates === 'string') {
-        try {
-            return format(new Date(dates), 'MMM d, yyyy');
-        } catch (e) {
-            return dates;
-        }
+        return formatDateSafe(dates, 'MMM d, yyyy');
     }
   if (Array.isArray(dates)) {
-    return dates.map(d => {
-        try {
-            return format(new Date(d), 'MMM d, yyyy')
-        } catch(e) {
-            return d;
-        }
-    }).join(', ');
+    return dates.map(d => formatDateSafe(d, 'MMM d, yyyy')).join(', ');
   }
   if (typeof dates === 'object' && dates.from) {
-    try {
-        if (dates.to) {
-          return `${format(new Date(dates.from), 'MMM d, yyyy')} - ${format(new Date(dates.to), 'MMM d, yyyy')}`;
-        }
-        return format(new Date(dates.from), 'MMM d, yyyy');
-    } catch(e) {
-        return dates.from;
+    const from = formatDateSafe(dates.from, 'MMM d, yyyy');
+    if (dates.to) {
+        const to = formatDateSafe(dates.to, 'MMM d, yyyy');
+        return `${from} - ${to}`;
     }
+    return from;
   }
   return 'N/A';
 };
@@ -205,37 +200,40 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     const { data: allAvailableWans, isLoading } = useCollection<WanRequest>(allAvailableWansQuery);
 
     const eligibleWans = useMemo(() => {
-        if (!allAvailableWans || !request.startDate) return [];
+        if (!allAvailableWans) return [];
         
         const isPriorMonthOnly = config?.priorMonthWanOnly !== false;
 
+        // If rule is OFF, user says "no conditions" - show all available WANs
+        if (!isPriorMonthOnly) {
+            return allAvailableWans;
+        }
+
+        // If rule is ON, we filter by month
+        if (!request.startDate) return [];
+
         try {
             const leaveStartDate = new Date(request.startDate);
+            if (!isValid(leaveStartDate)) return [];
 
-            if (isPriorMonthOnly) {
-                const leaveStartMonth = leaveStartDate.getMonth();
-                const leaveStartYear = leaveStartDate.getFullYear();
+            const leaveStartMonth = leaveStartDate.getMonth();
+            const leaveStartYear = leaveStartDate.getFullYear();
 
-                return allAvailableWans.filter(wan => {
-                    const wanDate = new Date(wan.dateOfWan);
-                    const wanMonth = wanDate.getMonth();
-                    const wanYear = wanDate.getFullYear();
+            return allAvailableWans.filter(wan => {
+                const wanDate = new Date(wan.dateOfWan);
+                if (!isValid(wanDate)) return false;
+                const wanMonth = wanDate.getMonth();
+                const wanYear = wanDate.getFullYear();
 
-                    return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
-                });
-            } else {
-                return allAvailableWans.filter(wan => {
-                    const wanDate = new Date(wan.dateOfWan);
-                    return wanDate <= leaveStartDate;
-                });
-            }
+                return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
+            });
         } catch(e) {
             return [];
         }
     }, [allAvailableWans, request.startDate, config]);
 
 
-    const requiredHours = request.daysApplied * 8;
+    const requiredHours = (request.daysApplied || 0) * 8;
     const selectedHours = useMemo(() => {
         return selectedWans.reduce((total, wan) => total + (wan.totalHours || 0), 0);
     }, [selectedWans]);
@@ -332,8 +330,8 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                     <DialogDescription>
                         Select available WANs for {request.name} to fulfill the required hours for this leave. 
                         {config?.priorMonthWanOnly !== false ? 
-                            `Only WANs from months prior to the leave start date (${format(new Date(request.startDate || Date.now()), 'MMM yyyy')}) are shown.` :
-                            `Any WAN earned on or before the leave start date (${format(new Date(request.startDate || Date.now()), 'MMM dd, yyyy')}) is eligible.`
+                            `Only WANs from months prior to the leave start date (${formatDateSafe(request.startDate, 'MMM yyyy')}) are shown.` :
+                            `All available WANs are currently eligible for this request.`
                         }
                     </DialogDescription>
                 </DialogHeader>
@@ -378,7 +376,7 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                                             />
                                         </TableCell>
                                         <TableCell><label htmlFor={`wan-${wan.id}`} className="font-mono">{wan.id}</label></TableCell>
-                                        <TableCell><label htmlFor={`wan-${wan.id}`}>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</label></TableCell>
+                                        <TableCell><label htmlFor={`wan-${wan.id}`}>{formatDateSafe(wan.dateOfWan, 'MMM dd, yyyy')}</label></TableCell>
                                         <TableCell className="text-right"><label htmlFor={`wan-${wan.id}`}>{(wan.totalHours || 0).toFixed(2)}</label></TableCell>
                                     </TableRow>
                                 ))}
@@ -576,7 +574,7 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
                   </TableCell>
                   <TableCell className="font-mono text-xs">{request.id}</TableCell>
                   <TableCell>{request.name}</TableCell>
-                  <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
                   <TableCell>{request.daysApplied}</TableCell>
                   <TableCell>{formatDateRange(request.inclusiveDates)}</TableCell>
                   <TableCell className="text-right space-x-1">
@@ -755,7 +753,7 @@ function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { w
               <TableRow key={request.id}>
                 <TableCell className="font-mono">{request.id}</TableCell>
                 <TableCell>{request.name}</TableCell>
-                <TableCell>{format(new Date(request.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                <TableCell>{formatDateSafe(request.dateOfWan, 'MMM dd, yyyy')}</TableCell>
                 <TableCell>{(request.totalHours || 0).toFixed(2)}</TableCell>
                 <TableCell>
                     <Badge variant={request.status === 'used' ? 'destructive' : 'secondary'}>
@@ -862,7 +860,7 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">{request.id}</TableCell>
                                     <TableCell>{request.name}</TableCell>
-                                    <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
                                     <TableCell className="font-mono text-[10px] max-w-[200px] truncate">
                                         {request.requestType === 'Wellness' ? 'N/A' : (request.attachedWanCodes?.join(', ') || 'N/A')}
                                     </TableCell>
@@ -902,7 +900,7 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">{request.id}</TableCell>
                                     <TableCell>{request.name}</TableCell>
-                                    <TableCell>{format(new Date(request.dateOfFiling), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
                                     <TableCell>{request.remarks || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
@@ -931,8 +929,10 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
         allWans.forEach(wan => {
             try {
                 const date = new Date(wan.dateOfWan);
-                yearSet.add(format(date, 'yyyy'));
-                monthSet.add(format(date, 'MMMM'));
+                if (isValid(date)) {
+                    yearSet.add(format(date, 'yyyy'));
+                    monthSet.add(format(date, 'MMMM'));
+                }
             } catch(e) {
                 // Ignore invalid dates
             }
@@ -950,12 +950,12 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
 
         if (selectedYear !== 'all') {
             filteredWans = filteredWans.filter(wan => {
-                try { return format(new Date(wan.dateOfWan), 'yyyy') === selectedYear } catch(e) { return false }
+                try { return formatDateSafe(wan.dateOfWan, 'yyyy') === selectedYear } catch(e) { return false }
             });
         }
         if (selectedMonth !== 'all') {
             filteredWans = filteredWans.filter(wan => {
-                try { return format(new Date(wan.dateOfWan), 'MMMM') === selectedMonth } catch(e) { return false }
+                try { return formatDateSafe(wan.dateOfWan, 'MMMM') === selectedMonth } catch(e) { return false }
             });
         }
         
@@ -1069,7 +1069,7 @@ function WanBalances({ wanRequests, isLoading }: { wanRequests: WanRequest[] | n
                                                                 {employee.availableWans.map(wan => (
                                                                     <TableRow key={wan.id}>
                                                                         <TableCell className="font-mono">{wan.id}</TableCell>
-                                                                        <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                                                        <TableCell>{formatDateSafe(wan.dateOfWan, 'MMM dd, yyyy')}</TableCell>
                                                                         <TableCell className="text-right">{(wan.totalHours || 0).toFixed(2)}</TableCell>
                                                                     </TableRow>
                                                                 ))}
@@ -1117,8 +1117,8 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
     };
     
     const getFileName = (wan: WanRequest) => {
-        const date = format(new Date(wan.dateOfWan), 'yyyy-MM-dd');
-        return `${wan.name}_${date}_${wan.id}.pdf`.replace(/ /g, '_');
+        const dateStr = wan.dateOfWan || 'no-date';
+        return `${wan.name}_${dateStr}_${wan.id}.pdf`.replace(/ /g, '_');
     }
 
     const handleExport = async () => {
@@ -1239,7 +1239,7 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
                                 </TableCell>
                                 <TableCell className="font-mono">{wan.id}</TableCell>
                                 <TableCell>{wan.name}</TableCell>
-                                <TableCell>{format(new Date(wan.dateOfWan), 'MMM dd, yyyy')}</TableCell>
+                                <TableCell>{formatDateSafe(wan.dateOfWan, 'MMM dd, yyyy')}</TableCell>
                                 <TableCell>
                                     <Badge variant={
                                         wan.status === 'used' ? 'destructive' :
@@ -1296,7 +1296,11 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
         if (filedWans) wans.push(...filedWans.map(w => ({...w, status: 'available' as const})));
         if (usedWans) wans.push(...usedWans.map(w => ({...w, status: 'used' as const})));
         if (rejectedWans) wans.push(...rejectedWans.map(w => ({...w, status: 'rejected' as const})));
-        return wans.sort((a,b) => new Date(b.dateOfWan).getTime() - new Date(a.dateOfWan).getTime());
+        return wans.sort((a,b) => {
+            const dateA = new Date(a.dateOfWan || 0).getTime();
+            const dateB = new Date(b.dateOfWan || 0).getTime();
+            return dateB - dateA;
+        });
     }, [filedWans, usedWans, rejectedWans]);
 
     const isLoadingWan = isLoadingFiled || isLoadingUsed || isLoadingRejected;

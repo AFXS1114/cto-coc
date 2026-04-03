@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, getDocs, collection, query, where, DocumentData } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
 interface LeaveRequest extends DocumentData {
@@ -21,23 +21,28 @@ interface LeaveRequest extends DocumentData {
     status?: string;
 }
 
+const formatDateSafe = (dateString: string | undefined, formatStr: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (!isValid(date)) return dateString;
+    return format(date, formatStr);
+}
+
 const formatDateRange = (dates: { from: string; to?: string } | string[] | string | undefined) => {
     if (!dates) return 'N/A';
     if (typeof dates === 'string') {
-        try { return format(new Date(dates), 'MM/dd/yyyy'); }
-        catch (e) { return dates; }
+        return formatDateSafe(dates, 'MM/dd/yyyy');
     }
   if (Array.isArray(dates)) {
-    return dates.map(d => {
-        try { return format(new Date(d), 'MM/dd/yyyy'); }
-        catch(e) { return d; }
-    }).join(', ');
+    return dates.map(d => formatDateSafe(d, 'MM/dd/yyyy')).join(', ');
   }
   if (typeof dates === 'object' && 'from' in dates && dates.from) {
-    try {
-        if (dates.to) return `${format(new Date(dates.from), 'MM/dd/yyyy')} - ${format(new Date(dates.to), 'MM/dd/yyyy')}`;
-        return format(new Date(dates.from), 'MM/dd/yyyy');
-    } catch(e) { return dates.from; }
+    const from = formatDateSafe(dates.from, 'MM/dd/yyyy');
+    if (dates.to) {
+        const to = formatDateSafe(dates.to, 'MM/dd/yyyy');
+        return `${from} - ${to}`;
+    }
+    return from;
   }
   return 'N/A';
 };
@@ -77,20 +82,26 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
 
                 let totalEarned = 0;
                 
-                if (foundDoc.status === 'Approved' && foundDoc.attachedWanCodes && foundDoc.attachedWanCodes.length > 0) {
-                    const wanQuery = query(collection(firestore, 'used-wan'), where('id', 'in', foundDoc.attachedWanCodes));
-                    const wanDocs = await getDocs(wanQuery);
-                    wanDocs.forEach(doc => {
-                        totalEarned += doc.data().totalHours || 0;
-                    });
-                } else {
-                     const allAvailableWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
-                     const wanDocs = await getDocs(allAvailableWansQuery);
-                     wanDocs.forEach(doc => {
-                         totalEarned += doc.data().totalHours || 0;
-                     });
+                try {
+                    if (foundDoc.status === 'Approved' && foundDoc.attachedWanCodes && foundDoc.attachedWanCodes.length > 0) {
+                        // Use a safe query approach. Firestore 'in' limit is 30.
+                        const wanQuery = query(collection(firestore, 'used-wan'), where('id', 'in', foundDoc.attachedWanCodes.slice(0, 30)));
+                        const wanDocs = await getDocs(wanQuery);
+                        wanDocs.forEach(doc => {
+                            totalEarned += doc.data().totalHours || 0;
+                        });
+                    } else if (foundDoc.name) {
+                         const allAvailableWansQuery = query(collection(firestore, 'filed-wan'), where('name', '==', foundDoc.name), where('status', '==', 'available'));
+                         const wanDocs = await getDocs(allAvailableWansQuery);
+                         wanDocs.forEach(doc => {
+                             totalEarned += doc.data().totalHours || 0;
+                         });
+                    }
+                } catch (e) {
+                    console.error("Error calculating WAN hours:", e);
                 }
-                const lessThisApplication = foundDoc.daysApplied * 8;
+
+                const lessThisApplication = (foundDoc.daysApplied || 0) * 8;
                 const balance = totalEarned - lessThisApplication;
 
                 setWanDetails({ totalEarned, balance });
@@ -118,23 +129,19 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
         return <div className="p-8 text-center text-muted-foreground">No data to display.</div>;
     }
     
-    const lessThisApplicationHours = leaveData.daysApplied * 8;
+    const lessThisApplicationHours = (leaveData.daysApplied || 0) * 8;
 
     return (
         <div style={{ padding: '10px 25px', fontFamily: '"Times New Roman", Times, serif', color: '#000', fontSize: '13px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', marginBottom: '20px' }}>
-                <div></div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '15px' }}>
-                    <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} />
-                    <div style={{ lineHeight: '1.2', textAlign: 'center' }}>
-                        <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
-                        <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
-                        <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
-                        <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
-                        <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
-                    </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px', marginBottom: '20px', marginLeft: '-120px' }}>
+                <Image src="/pfda-logo.png" alt="PFDA Logo" width={80} height={80} style={{ flexShrink: 0 }} />
+                <div style={{ lineHeight: '1.2', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Republic of the Philippines</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Department of Agriculture</p>
+                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>PHILIPPINE FISHERIES DEVELOPMENT AUTHORITY</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan Fish Port Complex</p>
+                    <p style={{ margin: 0, fontSize: '14px' }}>Bulan, Sorsogon</p>
                 </div>
-                <div></div>
             </div>
             
             <h1 style={{ textAlign: 'center', fontSize: '16px', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '5px' }}>
@@ -151,7 +158,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                         <td colSpan={2} style={{border: '1px solid black', padding: '4px', width: '75%'}}>2. NAME (Last, First, M.I.) <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{leaveData.name}</strong></td>
                     </tr>
                      <tr>
-                        <td style={{border: '1px solid black', padding: '4px'}}>3. DATE OF FILING <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{format(new Date(leaveData.dateOfFiling), 'MMMM dd, yyyy')}</strong></td>
+                        <td style={{border: '1px solid black', padding: '4px'}}>3. DATE OF FILING <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{formatDateSafe(leaveData.dateOfFiling, 'MMMM dd, yyyy')}</strong></td>
                         <td style={{border: '1px solid black', padding: '4px'}}>4. POSITION <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>{leaveData.position}</strong></td>
                         <td style={{border: '1px solid black', padding: '4px'}}>5. MONTHLY SALARY <br/> <strong style={{fontSize: '13px', fontWeight: 'bold', textAlign: 'center', display: 'block'}}>&nbsp;</strong></td>
                     </tr>
@@ -210,7 +217,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                     <tr>
                         <td style={{width: '50%', padding: '5px 8px', verticalAlign: 'top', border: '1px solid black', textAlign: 'center'}}>
                             <div style={{ padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>6(c) NUMBER OF DAYS APPLIED FOR</div>
-                            <div style={{paddingTop: '8px', paddingBottom: '8px', fontWeight: 'bold'}}>{leaveData.daysApplied} day(s)</div>
+                            <div style={{paddingTop: '8px', paddingBottom: '8px', fontWeight: 'bold'}}>{leaveData.daysApplied || 0} day(s)</div>
                             <div style={{ padding: '2px', fontWeight: 'bold', fontSize: '11px', textAlign: 'left'}}>INCLUSIVE DATES</div>
                             <div style={{paddingTop: '8px', paddingBottom: '8px'}}>{formatDateRange(leaveData.inclusiveDates)}</div>
                         </td>
@@ -235,7 +242,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                     <tr>
                         <td style={{width: '50%', padding: '8px', verticalAlign: 'top', border: '1px solid black'}}>
                              <strong style={{fontSize: '11px'}}>7(a) CERTIFICATION OF LEAVE CREDITS</strong>
-                             <p style={{marginTop: '5px', fontSize: '11px'}}>As of: <strong style={{textDecoration: 'underline'}}>{format(new Date(), 'MM/dd/yyyy')}</strong></p>
+                             <p style={{marginTop: '5px', fontSize: '11px'}}>As of: <strong style={{textDecoration: 'underline'}}>{formatDateSafe(undefined, 'MM/dd/yyyy') === 'N/A' ? format(new Date(), 'MM/dd/yyyy') : formatDateSafe(undefined, 'MM/dd/yyyy')}</strong></p>
                             {leaveData.attachedWanCodes && leaveData.attachedWanCodes.length > 0 && (
                                 <p style={{fontSize: '11px', marginTop: '2px'}}>Attached WAN: {leaveData.attachedWanCodes.join(', ')}</p>
                             )}
