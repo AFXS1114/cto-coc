@@ -73,6 +73,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,6 +88,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 
 interface Employee extends DocumentData {
   id: string;
@@ -118,6 +120,7 @@ type EditEmployeeFormValues = z.infer<typeof editEmployeeFormSchema>;
 const wanConfigSchema = z.object({
   minWanHours: z.coerce.number().min(0.5, 'Minimum hours must be at least 0.5'),
   maxWanHours: z.coerce.number().min(1, 'Maximum hours must be greater than 0'),
+  priorMonthWanOnly: z.boolean(),
 });
 
 type WanConfigValues = z.infer<typeof wanConfigSchema>;
@@ -133,6 +136,7 @@ function WanConfigForm() {
     defaultValues: {
       minWanHours: 2,
       maxWanHours: 24,
+      priorMonthWanOnly: true,
     },
   });
 
@@ -141,6 +145,7 @@ function WanConfigForm() {
       form.reset({
         minWanHours: config.minWanHours || 2,
         maxWanHours: config.maxWanHours || 24,
+        priorMonthWanOnly: config.priorMonthWanOnly !== false,
       });
     }
   }, [config, form]);
@@ -150,7 +155,7 @@ function WanConfigForm() {
       await setDoc(configRef, data, { merge: true });
       toast({
         title: 'Settings Updated',
-        description: 'WAN filing limits have been saved.',
+        description: 'WAN filing limits and rules have been saved.',
       });
     } catch (error) {
       console.error('Error saving config:', error);
@@ -166,7 +171,7 @@ function WanConfigForm() {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-md">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-md">
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -195,8 +200,32 @@ function WanConfigForm() {
             )}
           />
         </div>
+
+        <div className="p-4 border rounded-lg bg-muted/30">
+            <FormField
+                control={form.control}
+                name="priorMonthWanOnly"
+                render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
+                    <div className="space-y-0.5">
+                    <FormLabel>Prior Month Rule</FormLabel>
+                    <FormDescription>
+                        When ON, only WANs earned in previous months can be used for leave.
+                    </FormDescription>
+                    </div>
+                    <FormControl>
+                    <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                    />
+                    </FormControl>
+                </FormItem>
+                )}
+            />
+        </div>
+
         <Button type="submit" className="w-full">
-          Save Limits
+          Save Settings
         </Button>
       </form>
     </Form>
@@ -716,7 +745,7 @@ export default function SettingsPage() {
                 </TabsContent>
                 <TabsContent value="app-config">
                   <div className="mt-6">
-                    <h3 className="text-xl font-semibold tracking-tight font-headline mb-4">WAN filing Limits</h3>
+                    <h3 className="text-xl font-semibold tracking-tight font-headline mb-4">System Rules & Limits</h3>
                     <WanConfigForm />
                   </div>
                 </TabsContent>

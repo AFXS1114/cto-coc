@@ -50,7 +50,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown, HeartPulse, FileText } from 'lucide-react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, isSameDay } from 'date-fns';
@@ -190,6 +190,9 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     const { toast } = useToast();
     const [selectedWans, setSelectedWans] = useState<WanRequest[]>([]);
     
+    const configRef = useMemoFirebase(() => doc(firestore, 'app-settings', 'wan-config'), [firestore]);
+    const { data: config } = useDoc<any>(configRef);
+
     const allAvailableWansQuery = useMemoFirebase(() => {
         if (!firestore || !request) return null;
         return query(
@@ -204,22 +207,32 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
     const eligibleWans = useMemo(() => {
         if (!allAvailableWans || !request.startDate) return [];
         
+        const isPriorMonthOnly = config?.priorMonthWanOnly !== false;
+
         try {
             const leaveStartDate = new Date(request.startDate);
-            const leaveStartMonth = leaveStartDate.getMonth();
-            const leaveStartYear = leaveStartDate.getFullYear();
 
-            return allAvailableWans.filter(wan => {
-                const wanDate = new Date(wan.dateOfWan);
-                const wanMonth = wanDate.getMonth();
-                const wanYear = wanDate.getFullYear();
+            if (isPriorMonthOnly) {
+                const leaveStartMonth = leaveStartDate.getMonth();
+                const leaveStartYear = leaveStartDate.getFullYear();
 
-                return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
-            });
+                return allAvailableWans.filter(wan => {
+                    const wanDate = new Date(wan.dateOfWan);
+                    const wanMonth = wanDate.getMonth();
+                    const wanYear = wanDate.getFullYear();
+
+                    return wanYear < leaveStartYear || (wanYear === leaveStartYear && wanMonth < leaveStartMonth);
+                });
+            } else {
+                return allAvailableWans.filter(wan => {
+                    const wanDate = new Date(wan.dateOfWan);
+                    return wanDate <= leaveStartDate;
+                });
+            }
         } catch(e) {
             return [];
         }
-    }, [allAvailableWans, request.startDate]);
+    }, [allAvailableWans, request.startDate, config]);
 
 
     const requiredHours = request.daysApplied * 8;
@@ -318,7 +331,10 @@ function AttachWansDialog({ request, onOpenChange, open }: { request: LeaveReque
                     <DialogTitle>Attach WAN to Approve Leave</DialogTitle>
                     <DialogDescription>
                         Select available WANs for {request.name} to fulfill the required hours for this leave. 
-                        Only WANs from months prior to the leave start date ({format(new Date(request.startDate || Date.now()), 'MMM yyyy')}) are shown.
+                        {config?.priorMonthWanOnly !== false ? 
+                            `Only WANs from months prior to the leave start date (${format(new Date(request.startDate || Date.now()), 'MMM yyyy')}) are shown.` :
+                            `Any WAN earned on or before the leave start date (${format(new Date(request.startDate || Date.now()), 'MMM dd, yyyy')}) is eligible.`
+                        }
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">

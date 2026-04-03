@@ -270,6 +270,10 @@
         "maxWanHours": {
           "type": "number",
           "description": "Maximum hours allowed per WAN filing."
+        },
+        "priorMonthWanOnly": {
+          "type": "boolean",
+          "description": "If true, only WANs from previous months can be used for leave. If false, any WAN earned on or before the leave date can be used."
         }
       }
     }
