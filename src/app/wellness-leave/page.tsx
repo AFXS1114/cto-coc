@@ -11,8 +11,9 @@ import {
   Calendar as CalendarIcon,
   X,
   ChevronsUpDown,
+  AlertCircle,
 } from 'lucide-react';
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +45,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, query, where } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -58,6 +59,7 @@ import { Printer } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import LeavePrintForm from '../print-leave/LeavePrintForm';
 import { ToastAction } from '@/components/ui/toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface Employee {
     id: string;
@@ -172,6 +174,26 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
   const { toast } = useToast();
   const firestore = useFirestore();
 
+  // Balance Check Logic
+  const pendingWellnessQuery = useMemoFirebase(() => 
+    query(collection(firestore, 'to-process-leave'), where('name', '==', employee.name), where('requestType', '==', 'Wellness')), [firestore, employee.name]
+  );
+  const { data: pending, isLoading: loadingPending } = useCollection(pendingWellnessQuery);
+
+  const approvedWellnessQuery = useMemoFirebase(() => 
+    query(collection(firestore, 'processed-cto'), where('name', '==', employee.name), where('requestType', '==', 'Wellness')), [firestore, employee.name]
+  );
+  const { data: approved, isLoading: loadingApproved } = useCollection(approvedWellnessQuery);
+
+  const totalUsed = useMemo(() => {
+    const pDays = pending?.reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+    const aDays = approved?.reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+    return pDays + aDays;
+  }, [pending, approved]);
+
+  const balance = Math.max(0, 5 - totalUsed);
+  const isLimitReached = balance <= 0;
+
   const form = useForm<WellnessFormValues>({
     resolver: zodResolver(wellnessFormSchema),
     defaultValues: {
@@ -191,8 +213,16 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
   });
 
   function onSubmit(data: WellnessFormValues) {
-    const newLeaveCode = generateLeaveCode(data.dateOfFiling);
+    if (balance < data.daysApplied) {
+        toast({
+            variant: 'destructive',
+            title: 'Insufficient Balance',
+            description: `You only have ${balance} day(s) of wellness leave remaining for this year.`,
+        });
+        return;
+    }
 
+    const newLeaveCode = generateLeaveCode(data.dateOfFiling);
     const inclusiveDatesFormatted = data.inclusiveDates.map(date => format(date, 'yyyy-MM-dd'));
     
     const submissionData = {
@@ -227,15 +257,34 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
     onBack();
   }
 
+  if (loadingPending || loadingApproved) {
+      return <Skeleton className="h-96 w-full" />;
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-3xl font-headline flex items-center gap-2">
-          <HeartPulse className="h-8 w-8 text-primary" />
-          File Wellness Leave
+        <CardTitle className="text-3xl font-headline flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <HeartPulse className="h-8 w-8 text-primary" />
+            File Wellness Leave
+          </div>
+          <Badge variant={isLimitReached ? "destructive" : "secondary"} className="text-sm px-4 py-1">
+            Balance: {balance} / 5 Days
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {isLimitReached ? (
+            <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Annual Limit Reached</AlertTitle>
+                <AlertDescription>
+                    You have already used your 5-day annual allowance for wellness leave. Filing is disabled until the next yearly reset.
+                </AlertDescription>
+            </Alert>
+        ) : null}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -293,6 +342,7 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
                               'w-full text-left font-normal',
                               !field.value && 'text-muted-foreground'
                             )}
+                            disabled={isLimitReached}
                           >
                             {field.value ? (
                               format(field.value, 'PPP')
@@ -339,7 +389,7 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
                   <FormItem>
                     <FormLabel>No. of Days Applied for</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} min="1" max="5" />
+                      <Input type="number" {...field} min="1" max={Math.min(5, balance)} disabled={isLimitReached} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -354,7 +404,7 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
                   <FormLabel>Inclusive Date(s)</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <Button variant="outline" className="w-full justify-start text-left font-normal" disabled={isLimitReached}>
                           <CalendarIcon className="mr-2 h-4 w-4" />
                           <span>{field.value.length > 0 ? `Selected ${field.value.length} dates` : "Select dates"}</span>
                         </Button>
@@ -365,6 +415,7 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
                           selected={field.value}
                           onSelect={(dates) => field.onChange(dates || [])}
                           initialFocus
+                          max={Math.floor(form.getValues('daysApplied'))}
                         />
                       </PopoverContent>
                     </Popover>
@@ -393,7 +444,7 @@ function WellnessLeaveForm({ employee, onBack, onFormSubmit }: { employee: Emplo
             />
              <div className="flex gap-4">
                 <Button variant="outline" onClick={onBack} className="w-full">Back</Button>
-                <Button type="submit" className="w-full">Submit Application</Button>
+                <Button type="submit" className="w-full" disabled={isLimitReached}>Submit Application</Button>
             </div>
           </form>
         </Form>

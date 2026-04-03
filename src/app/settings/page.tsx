@@ -22,6 +22,9 @@ import {
   Loader2,
   ClipboardList,
   Settings2,
+  HeartPulse,
+  RefreshCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
@@ -83,6 +86,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
 
 interface Employee extends DocumentData {
   id: string;
@@ -196,6 +200,133 @@ function WanConfigForm() {
         </Button>
       </form>
     </Form>
+  );
+}
+
+function WellnessMonitoring() {
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  const [isResetting, setIsResetting] = useState(false);
+
+  const employeesQuery = useMemoFirebase(() => collection(firestore, 'employees'), [firestore]);
+  const { data: employees, isLoading: loadingEmployees } = useCollection<Employee>(employeesQuery);
+
+  const pendingWellnessQuery = useMemoFirebase(() => 
+    query(collection(firestore, 'to-process-leave'), where('requestType', '==', 'Wellness')), [firestore]
+  );
+  const { data: pendingWellness } = useCollection(pendingWellnessQuery);
+
+  const approvedWellnessQuery = useMemoFirebase(() => 
+    query(collection(firestore, 'processed-cto'), where('requestType', '==', 'Wellness')), [firestore]
+  );
+  const { data: approvedWellness } = useCollection(approvedWellnessQuery);
+
+  const monitoringData = useMemo(() => {
+    if (!employees) return [];
+    return employees.map(emp => {
+      const pDays = pendingWellness?.filter(r => r.name === emp.name).reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+      const aDays = approvedWellness?.filter(r => r.name === emp.name).reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+      return {
+        id: emp.id,
+        name: emp.name,
+        used: pDays + aDays,
+        remaining: Math.max(0, 5 - (pDays + aDays))
+      };
+    }).sort((a, b) => b.used - a.used);
+  }, [employees, pendingWellness, approvedWellness]);
+
+  const handleReset = async () => {
+    setIsResetting(true);
+    try {
+      const batch = writeBatch(firestore);
+      
+      const pSnap = await getDocs(query(collection(firestore, 'to-process-leave'), where('requestType', '==', 'Wellness')));
+      pSnap.forEach(doc => batch.delete(doc.ref));
+
+      const aSnap = await getDocs(query(collection(firestore, 'processed-cto'), where('requestType', '==', 'Wellness')));
+      aSnap.forEach(doc => batch.delete(doc.ref));
+
+      const cSnap = await getDocs(query(collection(firestore, 'cancelled-cto'), where('requestType', '==', 'Wellness')));
+      cSnap.forEach(doc => batch.delete(doc.ref));
+
+      await batch.commit();
+      toast({ title: 'Wellness Reset Complete', description: 'All wellness leave records have been cleared for the new year.' });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Reset Failed', description: 'An error occurred during reset.' });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  if (loadingEmployees) return <Skeleton className="h-64 w-full" />;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-xl font-semibold font-headline">Annual Wellness Monitoring</h3>
+          <p className="text-sm text-muted-foreground">Tracking the 5-day annual limit per employee.</p>
+        </div>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="destructive" disabled={isResetting}>
+              {isResetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+              Reset for New Year
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                DANGER: Permanent Action
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This will **PERMANENTLY DELETE** all wellness leave records (Pending, Approved, and Cancelled) to reset everyone's balance to 5 days. 
+                <br /><br />
+                This action is intended to be performed **ONLY ONCE A YEAR** (e.g., every January 1st). Ensure you have exported all necessary reports before proceeding.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleReset} className="bg-destructive hover:bg-destructive/90">
+                Yes, Reset Balances
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee Name</TableHead>
+              <TableHead className="text-center">Days Used</TableHead>
+              <TableHead className="text-center">Days Remaining</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {monitoringData.map(data => (
+              <TableRow key={data.id}>
+                <TableCell className="font-medium">{data.name}</TableCell>
+                <TableCell className="text-center">{data.used}</TableCell>
+                <TableCell className="text-center font-bold">{data.remaining}</TableCell>
+                <TableCell className="text-right">
+                  {data.remaining === 0 ? (
+                    <Badge variant="destructive">Limit Reached</Badge>
+                  ) : data.used > 0 ? (
+                    <Badge variant="secondary">In Progress</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">No Usage</Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
 
@@ -569,12 +700,15 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="employees">
-                <TabsList className="grid w-full grid-cols-2 max-w-md mb-6">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
                   <TabsTrigger value="employees" className="flex items-center gap-2">
                     <Users className="h-4 w-4" /> Employees
                   </TabsTrigger>
                   <TabsTrigger value="app-config" className="flex items-center gap-2">
                     <Settings2 className="h-4 w-4" /> System Config
+                  </TabsTrigger>
+                  <TabsTrigger value="wellness" className="flex items-center gap-2">
+                    <HeartPulse className="h-4 w-4" /> Wellness Monitoring
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="employees">
@@ -584,6 +718,11 @@ export default function SettingsPage() {
                   <div className="mt-6">
                     <h3 className="text-xl font-semibold tracking-tight font-headline mb-4">WAN filing Limits</h3>
                     <WanConfigForm />
+                  </div>
+                </TabsContent>
+                <TabsContent value="wellness">
+                  <div className="mt-6">
+                    <WellnessMonitoring />
                   </div>
                 </TabsContent>
               </Tabs>
