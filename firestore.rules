@@ -17,6 +17,7 @@
  * - `/filed-wan/{wanId}`: Stores available WAN requests; access to this collection is not defined and defaults to public access.
  * - `/used-wan/{wanId}`: Stores used WAN requests; access to this collection is not defined and defaults to public access.
  * - `/rejected-wan/{wanId}`: Stores rejected WAN requests; access to this collection is not defined and defaults to public access.
+ * - `/app-settings/wan-config`: Stores global system limits for WAN filing.
  *
  * Key Security Decisions:
  * - User listing is implicitly denied (no top-level `/users` collection).
@@ -120,9 +121,9 @@ service cloud.firestore {
     match /to-process-leave/{leaveRequestId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -134,9 +135,9 @@ service cloud.firestore {
     match /processed-cto/{leaveRequestId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -148,9 +149,9 @@ service cloud.firestore {
     match /cancelled-cto/{leaveRequestId} {
      allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -162,9 +163,9 @@ service cloud.firestore {
     match /employees/{employeeId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -176,9 +177,9 @@ service cloud.firestore {
     match /app-users/{appUserId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
      /**
@@ -190,9 +191,9 @@ service cloud.firestore {
     match /filed-wan/{wanId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -204,9 +205,9 @@ service cloud.firestore {
     match /used-wan/{wanId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
     }
 
     /**
@@ -218,9 +219,20 @@ service cloud.firestore {
     match /rejected-wan/{wanId} {
       allow get: if true;
       allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    /**
+     * @description Access to global application settings.
+     * @path /app-settings/wan-config
+     * @allow get: public read access.
+     * @allow write: public write access for prototyping.
+     */
+    match /app-settings/wan-config {
+      allow get: if true;
+      allow write: if true;
     }
   }
 }
