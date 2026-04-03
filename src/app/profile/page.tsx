@@ -38,7 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound, Printer, Pencil, Plus, Trash2, Clock, FileWarning, FileCheck, FileX } from 'lucide-react';
+import { ArrowLeft, User, Eye, EyeOff, LogOut, Loader2, FileText, Globe, KeyRound, Printer, Pencil, Plus, Trash2, Clock, FileWarning, FileCheck, FileX, HeartPulse } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs, doc, updateDoc, DocumentData, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,6 +80,7 @@ interface LeaveRecord extends DocumentData {
   inclusiveDates: { from: string; to?: string } | string[] | string;
   status: 'Pending' | 'Approved' | 'Cancelled';
   remarks?: string;
+  requestType?: 'Leave' | 'Wellness';
 }
 
 interface WanRecord extends DocumentData {
@@ -383,6 +384,7 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead>Type</TableHead>
           <TableHead>Date Filed</TableHead>
           <TableHead className="text-center">No. of Days</TableHead>
           <TableHead>Inclusive Dates</TableHead>
@@ -393,6 +395,13 @@ function LeaveRecordsTable({ employee }: { employee: Employee }) {
       <TableBody>
         {allRecords.map((record) => (
           <TableRow key={record.id}>
+            <TableCell>
+                {record.requestType === 'Wellness' ? (
+                    <Badge variant="outline" className="text-primary border-primary/30">WL</Badge>
+                ) : (
+                    <Badge variant="outline" className="text-sky-700 border-sky-300">CTO</Badge>
+                )}
+            </TableCell>
             <TableCell>{format(new Date(record.submittedDate), 'MMM dd, yyyy')}</TableCell>
             <TableCell className="text-center">{record.daysApplied}</TableCell>
             <TableCell>{formatDateRange(record.inclusiveDates)}</TableCell>
@@ -808,7 +817,8 @@ function ChangePasswordDialog({ open, onOpenChange, appUserDocId }: { open: bool
 
         try {
             const appUserRef = doc(firestore, 'app-users', appUserDocId);
-            const appUserSnap = await getDocs(query(collection(firestore, 'app-users'), where('__name__', '==', appUserDocId)));
+            const q = query(collection(firestore, 'app-users'), where('__name__', '==', appUserDocId));
+            const appUserSnap = await getDocs(q);
 
             if (appUserSnap.empty) {
                 toast({ variant: 'destructive', title: 'Error', description: 'User not found.' });
@@ -984,6 +994,59 @@ function WanBalanceCard({ employee }: { employee: Employee }) {
     );
 }
 
+function WellnessBalanceCard({ employee }: { employee: Employee }) {
+    const firestore = useFirestore();
+
+    const pendingWellnessQuery = useMemoFirebase(() => {
+        if (!firestore || !employee) return null;
+        return query(
+            collection(firestore, 'to-process-leave'),
+            where('name', '==', employee.name),
+            where('requestType', '==', 'Wellness')
+        );
+    }, [firestore, employee.name]);
+
+    const approvedWellnessQuery = useMemoFirebase(() => {
+        if (!firestore || !employee) return null;
+        return query(
+            collection(firestore, 'processed-cto'),
+            where('name', '==', employee.name),
+            where('requestType', '==', 'Wellness')
+        );
+    }, [firestore, employee.name]);
+
+    const { data: pending, isLoading: isLoadingPending } = useCollection<LeaveRecord>(pendingWellnessQuery);
+    const { data: approved, isLoading: isLoadingApproved } = useCollection<LeaveRecord>(approvedWellnessQuery);
+
+    const totalUsed = useMemo(() => {
+        const pendingDays = pending?.reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+        const approvedDays = approved?.reduce((sum, r) => sum + (Number(r.daysApplied) || 0), 0) || 0;
+        return pendingDays + approvedDays;
+    }, [pending, approved]);
+
+    const balance = Math.max(0, 5 - totalUsed);
+
+    return (
+        <Card className="flex flex-col items-center justify-center p-4 border-accent/20">
+            <CardHeader className="p-2 text-center">
+                <CardDescription>Wellness Leave Balance</CardDescription>
+            </CardHeader>
+            <CardContent className="p-2 text-center">
+                {isLoadingPending || isLoadingApproved ? (
+                    <Skeleton className="h-10 w-24" />
+                ) : (
+                    <div className="space-y-1">
+                        <h2 className="text-4xl font-bold tracking-tighter text-accent font-sans">
+                            {balance}
+                        </h2>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Days Remaining</p>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 function StatsCard({ employee }: { employee: Employee }) {
     const firestore = useFirestore();
 
@@ -1009,13 +1072,6 @@ function StatsCard({ employee }: { employee: Employee }) {
     const filedWanCount = filedWans?.length || 0;
     const rejectedWanCount = rejectedWans?.length || 0;
     
-    const stats = [
-        { icon: FileCheck, label: 'Filed Leave', value: filedLeaveCount },
-        { icon: FileCheck, label: 'Filed WAN', value: filedWanCount },
-        { icon: FileX, label: 'Rejected Leave', value: rejectedLeaveCount },
-        { icon: FileX, label: 'Rejected WAN', value: rejectedWanCount },
-    ];
-
     return (
          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-muted-foreground mt-2">
             <div className="flex items-center gap-2">
@@ -1073,7 +1129,7 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
             </CardHeader>
             <CardContent>
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="p-4 rounded-lg bg-muted/50 border md:col-span-2">
                              <div className="flex items-center gap-2">
                                 <User className="h-5 w-5 text-primary"/>
@@ -1086,6 +1142,7 @@ function ProfileView({ employee, onLogout }: { employee: Employee, onLogout: () 
                             <StatsCard employee={employee} />
                         </div>
                         <WanBalanceCard employee={employee} />
+                        <WellnessBalanceCard employee={employee} />
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
                         <Button asChild className="w-full">
