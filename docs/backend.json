@@ -256,6 +256,22 @@
         "password",
         "restrictionLevel"
       ]
+    },
+    "AppSettings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "AppSettings",
+      "type": "object",
+      "description": "Global application configuration settings.",
+      "properties": {
+        "minWanHours": {
+          "type": "number",
+          "description": "Minimum hours required to file a WAN."
+        },
+        "maxWanHours": {
+          "type": "number",
+          "description": "Maximum hours allowed per WAN filing."
+        }
+      }
     }
   },
   "auth": {
@@ -448,6 +464,16 @@
               "description": "The unique identifier of the rejected WAN request."
             }
           ]
+        }
+      },
+      {
+        "path": "/app-settings/wan-config",
+        "definition": {
+          "entityName": "AppSettings",
+          "schema": {
+            "$ref": "#/backend/entities/AppSettings"
+          },
+          "description": "Global settings for WAN hour limits."
         }
       }
     ],

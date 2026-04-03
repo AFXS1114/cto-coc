@@ -14,7 +14,7 @@ import {
   Clock,
   Printer,
 } from 'lucide-react';
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +44,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, parse } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError, useDoc } from '@/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -87,7 +87,7 @@ const taskOptions = [
     'Prepare daily Unloading and Berthing slip;',
 ];
 
-const wanCocFormSchema = z.object({
+const wanCocFormSchemaBase = z.object({
   wanCode: z.string().optional(),
   name: z.string().min(1, 'Name is required.'),
   dateOfWan: z.date(),
@@ -100,11 +100,11 @@ const wanCocFormSchema = z.object({
       type: z.enum(['select', 'custom']),
       value: z.string().min(1, "Please provide a task description.")
   })).min(1, "At least one task is required."),
-  totalHours: z.number().min(4, "Minimum overtime is 4 hours."),
+  totalHours: z.number(),
   status: z.string().default('available'),
 });
 
-type WanCocFormValues = z.infer<typeof wanCocFormSchema>;
+type WanCocFormValues = z.infer<typeof wanCocFormSchemaBase>;
 
 function generateWanCode(wanDate: Date) {
   const datePart = format(wanDate, 'yyMMdd');
@@ -201,6 +201,18 @@ function WanCocForm({ employee, onBack, onFormSubmit }: { employee: Employee, on
   const firestore = useFirestore();
   const router = useRouter();
 
+  const configRef = useMemoFirebase(() => doc(firestore, 'app-settings', 'wan-config'), [firestore]);
+  const { data: config } = useDoc<any>(configRef);
+
+  const minLimit = config?.minWanHours ?? 2;
+  const maxLimit = config?.maxWanHours ?? 24;
+
+  const wanCocFormSchema = useMemo(() => wanCocFormSchemaBase.extend({
+    totalHours: z.number()
+      .min(minLimit, `Minimum overtime is ${minLimit} hours.`)
+      .max(maxLimit, `Maximum overtime is ${maxLimit} hours.`),
+  }), [minLimit, maxLimit]);
+
   const form = useForm<WanCocFormValues>({
     resolver: zodResolver(wanCocFormSchema),
     defaultValues: {
@@ -250,21 +262,19 @@ function WanCocForm({ employee, onBack, onFormSubmit }: { employee: Employee, on
           let startTime = parse(timeRange.from, 'HH:mm', new Date());
           let endTime = parse(timeRange.to, 'HH:mm', new Date());
 
-          if (endTime < startTime) { // Handles overnight case
+          if (endTime < startTime) { 
             endTime.setDate(endTime.getDate() + 1);
           }
 
           let duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
-          // Check for lunch break exclusion
           const rangeStart = startTime.getTime();
           const rangeEnd = endTime.getTime();
           const lunchStartTime = lunchStart.getTime();
           const lunchEndTime = lunchEnd.getTime();
           
-          // Check if the range fully contains the lunch break
           if (rangeStart < lunchStartTime && rangeEnd > lunchEndTime) {
-            duration -= 60; // Subtract 1 hour in minutes
+            duration -= 60; 
           }
           
           totalMinutes += duration;
@@ -293,7 +303,6 @@ function WanCocForm({ employee, onBack, onFormSubmit }: { employee: Employee, on
         id: newWanCode,
         wanCode: newWanCode,
         dateOfWan: format(data.dateOfWan, 'yyyy-MM-dd'),
-        // We only need the value for the database
         tasks: data.tasks.map(task => ({ value: task.value })),
     };
 
@@ -483,7 +492,6 @@ function WanCocForm({ employee, onBack, onFormSubmit }: { employee: Employee, on
                                             <RadioGroup
                                             onValueChange={(value) => {
                                                 field.onChange(value);
-                                                // Reset value when switching
                                                 form.setValue(`tasks.${index}.value`, '');
                                             }}
                                             defaultValue={field.value}

@@ -21,9 +21,10 @@ import {
   Trash2,
   Loader2,
   ClipboardList,
+  Settings2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import {
   collection,
   doc,
@@ -81,6 +82,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Employee extends DocumentData {
   id: string;
@@ -108,6 +110,94 @@ const editEmployeeFormSchema = z.object({
 });
 
 type EditEmployeeFormValues = z.infer<typeof editEmployeeFormSchema>;
+
+const wanConfigSchema = z.object({
+  minWanHours: z.coerce.number().min(0.5, 'Minimum hours must be at least 0.5'),
+  maxWanHours: z.coerce.number().min(1, 'Maximum hours must be greater than 0'),
+});
+
+type WanConfigValues = z.infer<typeof wanConfigSchema>;
+
+function WanConfigForm() {
+  const { toast } = useToast();
+  const firestore = useFirestore();
+  const configRef = useMemoFirebase(() => doc(firestore, 'app-settings', 'wan-config'), [firestore]);
+  const { data: config, isLoading } = useDoc<any>(configRef);
+
+  const form = useForm<WanConfigValues>({
+    resolver: zodResolver(wanConfigSchema),
+    defaultValues: {
+      minWanHours: 2,
+      maxWanHours: 24,
+    },
+  });
+
+  useEffect(() => {
+    if (config) {
+      form.reset({
+        minWanHours: config.minWanHours || 2,
+        maxWanHours: config.maxWanHours || 24,
+      });
+    }
+  }, [config, form]);
+
+  const onSubmit = async (data: WanConfigValues) => {
+    try {
+      await setDoc(configRef, data, { merge: true });
+      toast({
+        title: 'Settings Updated',
+        description: 'WAN filing limits have been saved.',
+      });
+    } catch (error) {
+      console.error('Error saving config:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save settings.',
+      });
+    }
+  };
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-md">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="minWanHours"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Filing Hours</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.5" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="maxWanHours"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Filing Hours</FormLabel>
+                <FormControl>
+                  <Input type="number" step="0.5" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <Button type="submit" className="w-full">
+          Save Limits
+        </Button>
+      </form>
+    </Form>
+  );
+}
 
 function EditEmployeeModal({
   employee,
@@ -250,7 +340,7 @@ function EditEmployeeModal({
 function EmployeesTable() {
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [dataVersion, setDataVersion] = useState(0); // Used to force re-fetch
+  const [dataVersion, setDataVersion] = useState(0); 
   const [employeeToEdit, setEmployeeToEdit] = useState<EmployeeWithCategory | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -308,7 +398,7 @@ function EmployeesTable() {
         title: 'Employee Deleted',
         description: `${employee.name} has been removed from the system.`,
       });
-      setDataVersion(v => v + 1); // Trigger re-fetch
+      setDataVersion(v => v + 1); 
     } catch (error) {
       console.error("Error deleting employee: ", error);
       toast({
@@ -361,7 +451,7 @@ function EmployeesTable() {
                   <TableCell>{employee.category}</TableCell>
                   <TableCell>{employee.employmentType}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)} disabled>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(employee)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <AlertDialog>
@@ -474,11 +564,29 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle className="text-3xl font-headline">Settings</CardTitle>
                <CardDescription>
-                Add new employees or app users, and manage existing employee records.
+                System configuration and employee records.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <EmployeesTable />
+              <Tabs defaultValue="employees">
+                <TabsList className="grid w-full grid-cols-2 max-w-md mb-6">
+                  <TabsTrigger value="employees" className="flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Employees
+                  </TabsTrigger>
+                  <TabsTrigger value="app-config" className="flex items-center gap-2">
+                    <Settings2 className="h-4 w-4" /> System Config
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="employees">
+                  <EmployeesTable />
+                </TabsContent>
+                <TabsContent value="app-config">
+                  <div className="mt-6">
+                    <h3 className="text-xl font-semibold tracking-tight font-headline mb-4">WAN filing Limits</h3>
+                    <WanConfigForm />
+                  </div>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
         </main>
