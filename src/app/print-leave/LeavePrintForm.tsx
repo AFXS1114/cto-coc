@@ -261,7 +261,7 @@ export default function LeavePrintForm({ leaveId }: { leaveId: string }) {
                                 </tbody>
                             </table>
                             <div style={{textAlign: 'center', marginTop: '15px'}}>
-                                <p style={{fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1px solid black', width: '180px', margin: '0 auto', fontSize: '11px'}}>CHERRY ANN S. DE LA ROSA</p>
+                                <p style={{fontWeight: 'bold', textTransform: 'uppercase', borderBottom: '1px solid black', width: '200px', margin: '0 auto', fontSize: '11px'}}>ATTY. CHERRY ANN S. DE LA ROSA</p>
                                 <p style={{fontSize: '10px'}}>HRMO II</p>
                                 <p style={{fontSize: '10px'}}>Admin./Personnel Officer</p>
                             </div>
