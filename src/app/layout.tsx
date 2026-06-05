@@ -1,7 +1,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { FirebaseClientProvider } from '@/firebase';
+import { FirebaseProviderWrapper } from '@/components/firebase-provider-wrapper';
 
 export const metadata: Metadata = {
   title: 'CTO & COC Management',
@@ -21,9 +21,9 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter&family=Noto+Serif:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <FirebaseClientProvider>
+        <FirebaseProviderWrapper>
           {children}
-        </FirebaseClientProvider>
+        </FirebaseProviderWrapper>
         <Toaster />
       </body>
     </html>

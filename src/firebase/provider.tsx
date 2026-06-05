@@ -142,13 +142,10 @@ export const useAuth = (): Auth => {
   return auth;
 };
 
-/** Hook to access Firestore instance. Returns null if not available (e.g. during SSR). */
-export const useFirestore = (): Firestore | null => {
-  const context = useContext(FirebaseContext);
-  if (context === undefined) {
-    return null;
-  }
-  return context.firestore;
+/** Hook to access Firestore instance. */
+export const useFirestore = (): Firestore => {
+  const { firestore } = useFirebase();
+  return firestore;
 };
 
 /** Hook to access Firebase App instance. */
