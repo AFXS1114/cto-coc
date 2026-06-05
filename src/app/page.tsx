@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FileText, Globe, ArrowRight, BookUser, Settings, User, HeartPulse } from 'lucide-react';
+import { FileText, Globe, ArrowRight, BookUser, Settings, User, HeartPulse, Home } from 'lucide-react';
 import {
   Card,
   CardHeader,
@@ -110,6 +110,27 @@ export default function Home() {
                   Register your rendered overtime hours. Earn credits to be used for future leave applications.
                 </CardDescription>
                 <Button variant="link" className="p-0 mt-4 font-semibold text-primary group-hover:gap-3 transition-all">
+                  Go to form <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/work-from-home" className="group">
+            <Card className="h-full border-2 border-transparent transition-all duration-300 hover:border-accent/20 hover:shadow-xl hover:shadow-accent/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-3 text-xl font-headline group-hover:text-accent transition-colors">
+                  <div className="p-2 rounded-lg bg-accent/10 group-hover:bg-accent group-hover:text-accent-foreground transition-all">
+                    <Home className="h-6 w-6" />
+                  </div>
+                  Work From Home
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Submit a Work From Home request. Specify your WFH dates and provide a reason for remote work arrangement.
+                </CardDescription>
+                <Button variant="link" className="p-0 mt-4 font-semibold text-accent group-hover:gap-3 transition-all">
                   Go to form <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>

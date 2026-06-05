@@ -49,7 +49,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown, HeartPulse, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Search, XCircle, Eye, Printer, Loader2, EyeOff, LogOut, CalendarIcon, X, ChevronDown, Download, FileDown, HeartPulse, FileText, Home } from 'lucide-react';
 import { useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, setDoc, deleteDoc, DocumentData, writeBatch, query, where, getDocs, Firestore } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -64,6 +64,7 @@ import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import LeavePrintForm from '../print-leave/LeavePrintForm';
 import WanPrintForm from '../print-wan/WanPrintForm';
+import WfhPrintForm from '../print-wfh/WfhPrintForm';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
@@ -95,6 +96,18 @@ interface WanRequest extends DocumentData {
     status?: 'available' | 'used' | 'rejected';
     remarks?: string;
     sourceWanId?: string;
+}
+
+interface WfhRequest extends DocumentData {
+    id: string; // This is the wfhCode
+    name: string;
+    dateOfFiling: string;
+    position: string;
+    wfhDates: { from: string; to?: string };
+    reason: string;
+    status?: 'Pending' | 'Approved' | 'Cancelled';
+    remarks?: string;
+    requestType?: 'WFH';
 }
 
 interface AppUser extends DocumentData {
@@ -134,7 +147,7 @@ const formatDateRange = (dates: { from: string; to?: string } | string[] | strin
   return 'N/A';
 };
 
-function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'leave' | 'wan', id: string} | null, open: boolean, onOpenChange: (open: boolean) => void }) {
+function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'leave' | 'wan' | 'wfh', id: string} | null, open: boolean, onOpenChange: (open: boolean) => void }) {
     if (!docInfo) return null;
 
     const handlePrint = () => {
@@ -158,6 +171,7 @@ function PrintPreviewModal({ docInfo, open, onOpenChange }: { docInfo: {type: 'l
                     <div id="print-content">
                         {docInfo.type === 'leave' && <LeavePrintForm leaveId={docInfo.id} />}
                         {docInfo.type === 'wan' && <WanPrintForm wanId={docInfo.id} />}
+                        {docInfo.type === 'wfh' && <WfhPrintForm wfhId={docInfo.id} />}
                     </div>
                 </ScrollArea>
                 <DialogFooter>
@@ -667,6 +681,254 @@ function PendingLeaveTable({ pendingRequests, isLoading, onPrint }: { pendingReq
     );
   }
 
+function PendingWfhTable({ pendingRequests, isLoading, onPrint }: { pendingRequests: WfhRequest[] | null, isLoading: boolean, onPrint: (id: string) => void }) {
+    const firestore = useFirestore();
+    const { toast } = useToast();
+    const [remarks, setRemarks] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+    const [wfhToApprove, setWfhToApprove] = useState<WfhRequest | null>(null);
+    const [isApprovingWfh, setIsApprovingWfh] = useState(false);
+
+    const filteredRequests = useMemo(() => {
+      if (!pendingRequests) return [];
+      
+      let filtered = pendingRequests;
+
+      if (searchTerm) {
+        filtered = filtered.filter(request =>
+          request.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          request.id.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+
+      if (selectedDate) {
+        filtered = filtered.filter(request =>
+          isSameDay(new Date(request.dateOfFiling), selectedDate)
+        );
+      }
+
+      return filtered;
+    }, [pendingRequests, searchTerm, selectedDate]);
+
+    const handleCancel = async (request: WfhRequest) => {
+      if (!firestore) return;
+      
+      try {
+        const newDocRef = doc(firestore, 'cancelled-wfh', request.id);
+        await setDoc(newDocRef, { ...request, status: 'Cancelled', remarks });
+
+        const oldDocRef = doc(firestore, 'to-process-wfh', request.id);
+        await deleteDoc(oldDocRef);
+        
+        toast({
+          title: `Request Cancelled`,
+          description: `The WFH request for ${request.name} has been cancelled.`
+        });
+        setRemarks('');
+
+      } catch (error) {
+        console.error('Error cancelling WFH status:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Failed to cancel WFH request.'
+        });
+      }
+    };
+
+    const handleApproveWfh = async () => {
+        if (!firestore || !wfhToApprove) return;
+        setIsApprovingWfh(true);
+        try {
+            const batch = writeBatch(firestore);
+            const approvedData = { ...wfhToApprove, status: 'Approved' as const };
+            
+            const newDocRef = doc(firestore, 'processed-wfh', wfhToApprove.id);
+            batch.set(newDocRef, approvedData);
+
+            const oldDocRef = doc(firestore, 'to-process-wfh', wfhToApprove.id);
+            batch.delete(oldDocRef);
+
+            await batch.commit();
+
+            toast({
+                title: 'WFH Request Approved',
+                description: `The WFH request for ${wfhToApprove.name} has been approved.`
+            });
+            setWfhToApprove(null);
+        } catch (error) {
+            console.error('Error approving WFH request:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: 'Failed to approve WFH request.'
+            });
+        } finally {
+            setIsApprovingWfh(false);
+        }
+    };
+
+    const formatWfhDateRange = (dates: { from: string; to?: string } | undefined) => {
+        if (!dates) return 'N/A';
+        const from = formatDateSafe(dates.from, 'MMM dd, yyyy');
+        if (dates.to) {
+            const to = formatDateSafe(dates.to, 'MMM dd, yyyy');
+            return `${from} - ${to}`;
+        }
+        return from;
+    };
+
+    return (
+      <>
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+            <div className="relative flex-grow">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                placeholder="Search by name or WFH code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                />
+            </div>
+            <div className="flex items-center">
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button
+                        variant={'outline'}
+                        className={cn(
+                            'w-full sm:w-[240px] justify-start text-left font-normal',
+                            !selectedDate && 'text-muted-foreground'
+                        )}
+                        >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, 'PPP') : <span>Filter by date filed</span>}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={selectedDate}
+                            onSelect={setSelectedDate}
+                            initialFocus
+                        />
+                    </PopoverContent>
+                </Popover>
+                 {selectedDate && (
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-9 w-9 ml-1"
+                        onClick={() => setSelectedDate(undefined)}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
+                )}
+            </div>
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : filteredRequests.length === 0 ? (
+          <p className="text-center text-muted-foreground py-4">
+            {pendingRequests && pendingRequests.length > 0 ? 'No matching requests found.' : 'No pending WFH requests to manage.'}
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Employee Name</TableHead>
+                <TableHead>Date Filed</TableHead>
+                <TableHead>WFH Dates</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRequests.map((request) => (
+                <TableRow key={request.id}>
+                  <TableCell className="font-mono text-xs">{request.id}</TableCell>
+                  <TableCell>{request.name}</TableCell>
+                  <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
+                  <TableCell>{formatWfhDateRange(request.wfhDates)}</TableCell>
+                  <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
+                  <TableCell className="text-right space-x-1">
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="text-green-600 hover:text-green-700" 
+                        onClick={() => setWfhToApprove(request)}
+                    >
+                      <CheckCircle className="h-5 w-5" />
+                    </Button>
+                    
+                    <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                      <Printer className="h-5 w-5" />
+                    </Button>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-red-600 hover:text-red-700">
+                          <XCircle className="h-5 w-5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Cancel WFH Request?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will cancel the WFH request for {request.name}. Please provide a reason for the cancellation.
+                          </AlertDialogDescription>
+                          <div className="grid gap-2 pt-2">
+                              <Label htmlFor="wfh-remarks">Remarks</Label>
+                              <Textarea 
+                                  id="wfh-remarks" 
+                                  placeholder="Enter cancellation reason..." 
+                                  value={remarks}
+                                  onChange={(e) => setRemarks(e.target.value)}
+                              />
+                          </div>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel onClick={() => setRemarks('')}>Keep Pending</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleCancel(request)} disabled={!remarks}>
+                            Confirm Cancel
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        
+        <AlertDialog open={!!wfhToApprove} onOpenChange={(open) => !open && setWfhToApprove(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Approve WFH Request?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        You are about to approve the WFH request for <strong>{wfhToApprove?.name}</strong>. 
+                        WFH Period: {formatWfhDateRange(wfhToApprove?.wfhDates)}.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleApproveWfh} disabled={isApprovingWfh}>
+                        {isApprovingWfh ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirm Approval"}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+  }
+
 function FiledWanTable({ wanRequests, isLoading, onRejectSuccess, onPrint }: { wanRequests: WanRequest[] | null, isLoading: boolean, onRejectSuccess: () => void, onPrint: (id: string) => void }) {
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -901,6 +1163,111 @@ function ProcessedRecords({ approvedRequests, cancelledRequests, isLoading, onPr
                                     <TableCell className="font-mono text-xs">{request.id}</TableCell>
                                     <TableCell>{request.name}</TableCell>
                                     <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{request.remarks || 'N/A'}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    }
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
+
+function WfhRecords({ approvedRequests, cancelledRequests, isLoading, onPrint }: { approvedRequests: WfhRequest[] | null, cancelledRequests: WfhRequest[] | null, isLoading: boolean, onPrint: (id: string) => void }) {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeTab, setActiveTab] = useState('approved');
+
+    const filteredApproved = useMemo(() => {
+        if (!approvedRequests) return [];
+        return approvedRequests.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [approvedRequests, searchTerm]);
+
+    const filteredCancelled = useMemo(() => {
+        if (!cancelledRequests) return [];
+        return cancelledRequests.filter(r => r.name.toLowerCase().includes(searchTerm.toLowerCase()) || r.id.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [cancelledRequests, searchTerm]);
+
+    const formatWfhDateRange = (dates: { from: string; to?: string } | undefined) => {
+        if (!dates) return 'N/A';
+        const from = formatDateSafe(dates.from, 'MMM dd, yyyy');
+        if (dates.to) {
+            const to = formatDateSafe(dates.to, 'MMM dd, yyyy');
+            return `${from} - ${to}`;
+        }
+        return from;
+    };
+
+    return (
+        <div>
+            <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Input
+                placeholder="Search by name or WFH code..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+                />
+            </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab} defaultValue="approved">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="approved">Approved</TabsTrigger>
+                    <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+                </TabsList>
+                <TabsContent value="approved">
+                    {isLoading ? <Skeleton className="h-48 w-full" /> : 
+                     filteredApproved.length === 0 ? <p className="text-center text-muted-foreground py-4">No approved WFH requests found.</p> :
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Code</TableHead>
+                                <TableHead>Employee Name</TableHead>
+                                <TableHead>Date Filed</TableHead>
+                                <TableHead>WFH Dates</TableHead>
+                                <TableHead>Reason</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredApproved.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell className="font-mono text-xs">{request.id}</TableCell>
+                                    <TableCell>{request.name}</TableCell>
+                                    <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{formatWfhDateRange(request.wfhDates)}</TableCell>
+                                    <TableCell className="max-w-[200px] truncate">{request.reason}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="icon" className="text-blue-600 hover:text-blue-700" onClick={() => onPrint(request.id)}>
+                                            <Printer className="h-5 w-5" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    }
+                </TabsContent>
+                <TabsContent value="cancelled">
+                     {isLoading ? <Skeleton className="h-48 w-full" /> : 
+                     filteredCancelled.length === 0 ? <p className="text-center text-muted-foreground py-4">No cancelled WFH requests found.</p> :
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Code</TableHead>
+                                <TableHead>Employee Name</TableHead>
+                                <TableHead>Date Filed</TableHead>
+                                <TableHead>WFH Dates</TableHead>
+                                <TableHead>Remarks</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredCancelled.map((request) => (
+                                <TableRow key={request.id}>
+                                    <TableCell className="font-mono text-xs">{request.id}</TableCell>
+                                    <TableCell>{request.name}</TableCell>
+                                    <TableCell>{formatDateSafe(request.dateOfFiling, 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell>{formatWfhDateRange(request.wfhDates)}</TableCell>
                                     <TableCell>{request.remarks || 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
@@ -1271,13 +1638,19 @@ function WanExportTab({ wanRequests, isLoading }: { wanRequests: WanRequest[] | 
 function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
     const firestore = useFirestore();
     const [wanDataVersion, setWanDataVersion] = useState(0);
-    const [previewDoc, setPreviewDoc] = useState<{type: 'leave' | 'wan', id: string} | null>(null);
+    const [previewDoc, setPreviewDoc] = useState<{type: 'leave' | 'wan' | 'wfh', id: string} | null>(null);
 
     const pendingLeaveQuery = useMemoFirebase(
         () => collection(firestore, 'to-process-leave'),
         [firestore]
     );
     const { data: pendingRequests, isLoading: isLoadingPending } = useCollection<LeaveRequest>(pendingLeaveQuery);
+
+    const pendingWfhQuery = useMemoFirebase(
+        () => collection(firestore, 'to-process-wfh'),
+        [firestore]
+    );
+    const { data: pendingWfhRequests, isLoading: isLoadingPendingWfh } = useCollection<WfhRequest>(pendingWfhQuery);
 
     const filedWanQuery = useMemoFirebase(
         () => collection(firestore, 'filed-wan'),
@@ -1317,6 +1690,18 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
     );
     const { data: cancelledRequests, isLoading: isLoadingCancelled } = useCollection<LeaveRequest>(cancelledLeaveQuery);
 
+    const approvedWfhQuery = useMemoFirebase(
+        () => collection(firestore, 'processed-wfh'),
+        [firestore]
+    );
+    const { data: approvedWfhRequests, isLoading: isLoadingApprovedWfh } = useCollection<WfhRequest>(approvedWfhQuery);
+
+    const cancelledWfhQuery = useMemoFirebase(
+        () => collection(firestore, 'cancelled-wfh'),
+        [firestore]
+    );
+    const { data: cancelledWfhRequests, isLoading: isLoadingCancelledWfh } = useCollection<WfhRequest>(cancelledWfhQuery);
+
 
   return (
     <>
@@ -1333,13 +1718,19 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
         </CardHeader>
       <CardContent>
         <Tabs defaultValue="pending-leave">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="pending-leave" className="flex items-center gap-2">
                 Pending Leave
                 {pendingRequests && pendingRequests.length > 0 && (
                     <Badge className="h-5 w-5 flex items-center justify-center p-1">{pendingRequests.length}</Badge>
                 )}
                 </TabsTrigger>
+            <TabsTrigger value="pending-wfh" className="flex items-center gap-2">
+                Pending WFH
+                {pendingWfhRequests && pendingWfhRequests.length > 0 && (
+                    <Badge variant="secondary" className="h-5 w-5 flex items-center justify-center p-1">{pendingWfhRequests.length}</Badge>
+                )}
+            </TabsTrigger>
             <TabsTrigger value="filed-wan" className="flex items-center gap-2">
                 Filed WAN
                 {filedWans && filedWans.length > 0 && (
@@ -1348,6 +1739,7 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
             </TabsTrigger>
             <TabsTrigger value="wan-balances">WAN Balances</TabsTrigger>
             <TabsTrigger value="cto-coc-records">CTO/COC Records</TabsTrigger>
+            <TabsTrigger value="wfh-records">WFH Records</TabsTrigger>
             <TabsTrigger value="export">Export</TabsTrigger>
           </TabsList>
           <TabsContent value="pending-leave" className="pt-4">
@@ -1355,6 +1747,13 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
                 pendingRequests={pendingRequests} 
                 isLoading={isLoadingPending}
                 onPrint={(id) => setPreviewDoc({type: 'leave', id})} 
+            />
+          </TabsContent>
+          <TabsContent value="pending-wfh" className="pt-4">
+            <PendingWfhTable 
+                pendingRequests={pendingWfhRequests} 
+                isLoading={isLoadingPendingWfh}
+                onPrint={(id) => setPreviewDoc({type: 'wfh', id})} 
             />
           </TabsContent>
           <TabsContent value="filed-wan" className="pt-4">
@@ -1374,6 +1773,14 @@ function ManageCtoCocContent({onLogout}: {onLogout: () => void}) {
                 cancelledRequests={cancelledRequests}
                 isLoading={isLoadingApproved || isLoadingCancelled}
                 onPrint={(id) => setPreviewDoc({type: 'leave', id})}
+            />
+          </TabsContent>
+          <TabsContent value="wfh-records" className="pt-4">
+            <WfhRecords 
+                approvedRequests={approvedWfhRequests} 
+                cancelledRequests={cancelledWfhRequests}
+                isLoading={isLoadingApprovedWfh || isLoadingCancelledWfh}
+                onPrint={(id) => setPreviewDoc({type: 'wfh', id})}
             />
           </TabsContent>
           <TabsContent value="export" className="pt-4">
